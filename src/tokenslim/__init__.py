@@ -30,20 +30,24 @@ from .compressors import (
 )
 from .config import Config, load_config
 from .detector import ContentType, DetectionResult, detect_content_type
+from .evals import EvalResult, perf_report, run_suite
 from .formats import (
     MessageFormat,
     anthropic_to_openai,
     detect_format,
     openai_to_anthropic,
 )
+from .metrics import MetricsCollector, RunRecord
+from .pricing import ModelPrice, estimate_cost, get_price, register_price
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
 from .sizer import compute_optimal_k
 from .store import CCRStore, InMemoryCCRStore, SQLiteCCRStore, get_store
+from .telemetry import TelemetryEvent, TelemetrySink, get_sink, set_sink
 from .tokenizer import count_tokens, get_tokenizer
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "__version__",
@@ -84,4 +88,18 @@ __all__ = [
     "parse_marker",
     "find_markers",
     "strip_markers",
+    # Observability / evals
+    "estimate_cost",
+    "ModelPrice",
+    "get_price",
+    "register_price",
+    "MetricsCollector",
+    "RunRecord",
+    "run_suite",
+    "perf_report",
+    "EvalResult",
+    "TelemetryEvent",
+    "TelemetrySink",
+    "get_sink",
+    "set_sink",
 ]

@@ -76,6 +76,10 @@ messages ─▶ format detect ─▶ per block:
   carries a canonical `<<ccr:HASH N reason>>` marker. `retrieve(hash)` returns
   the exact original, so lossy compression is reversible. `CCRContext` scopes
   retrieval to markers actually seen in a conversation.
+- **observability** — `pricing` (per-model cost table + `estimate_cost`),
+  `metrics` (`MetricsCollector` aggregates tokens + $ saved → markdown report),
+  `evals` (offline ratio + faithfulness suite over bundled fixtures), and
+  anonymous opt-out `telemetry` (local no-op sink; nothing leaves the process).
 - **config** — layered: built-in defaults < `TOKENSLIM_*` env vars < per-call
   overrides.
 - **formats** — detect OpenAI vs Anthropic message shapes and convert between
@@ -102,6 +106,7 @@ messages ─▶ format detect ─▶ per block:
 | `TOKENSLIM_CCR_BACKEND` | `memory` | CCR store backend (`memory` / `sqlite`) |
 | `TOKENSLIM_CCR_PATH` | `tokenslim_ccr.sqlite3` | SQLite file (sqlite backend) |
 | `TOKENSLIM_CCR_TTL` | _(none)_ | Seconds before a stored original expires |
+| `TOKENSLIM_TELEMETRY` | `true` | Anonymous aggregate telemetry (`off` to disable) |
 
 Per call: `compress(messages, min_bytes=0, model="gpt-4o")`.
 
@@ -118,15 +123,37 @@ for marker in find_markers(out[0]["content"]):
     original = retrieve(marker.hash, store=stats.store)
 ```
 
+## Observability & evals
+
+```bash
+python -m tokenslim perf            # before/after tokens + $ saved + ratio
+python -m tokenslim evals           # ratio + faithfulness per fixture (exit 1 if any unfaithful)
+```
+
+```python
+from tokenslim import run_suite, perf_report, MetricsCollector, estimate_cost
+
+print(perf_report(model="gpt-4o"))
+results = run_suite()               # offline; checks must-keeps survive + drops recover
+```
+
+Evals are honest **without an LLM**: each bundled fixture is measured for
+compression ratio and *faithfulness* — answer-bearing content must survive in the
+visible output (error rows always do) and every dropped block must be recoverable
+verbatim from the CCR store. Telemetry is anonymous, opt-out, and local-only (the
+shipped sink makes no network call). LLM-based accuracy evals
+(GSM8K/TruthfulQA baseline-vs-compressed) are deferred — they need an API key.
+
 ## Status
 
-**Core compressors complete.** JSON (SmartCrusher), build/test logs, search
-results, and unified diffs all have real algorithms; a lossless JSON minifier, a
-shared adaptive sizer, and a BM25 relevance scorer round out the engine. All
-lossy drops are reversible via the CCR store (in-memory + SQLite). Still open:
-AST-aware code compression and extractive text compression; SmartCrusher's
-statistical-outlier / query-anchor keep and stack-trace state machine; and a
-distributed Redis CCR backend.
+**Core compressors + observability complete.** JSON (SmartCrusher), build/test
+logs, search results, and unified diffs all have real algorithms; a lossless JSON
+minifier, a shared adaptive sizer, and a BM25 relevance scorer round out the
+engine. All lossy drops are reversible via the CCR store (in-memory + SQLite),
+and a pricing/metrics/eval layer proves the savings offline. Still open: AST-aware
+code compression and extractive text compression; SmartCrusher's
+statistical-outlier / query-anchor keep and stack-trace state machine; LLM-based
+accuracy evals; and a distributed Redis CCR backend.
 
 ## License
 

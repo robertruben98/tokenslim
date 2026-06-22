@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from .config import Config, load_config
 from .detector import ContentType
 from .router import ContentRouter
+from .telemetry import record_event
 from .tokenizer import count_tokens
 
 if TYPE_CHECKING:
@@ -124,6 +125,14 @@ def _rewrite_text(
             changed=result.changed,
             skipped=result.skipped,
         )
+    )
+    # Anonymous telemetry (opt-out): only aggregate counts, never the payload.
+    record_event(
+        result.content_type.value,
+        orig_tokens,
+        new_tokens,
+        result.compressor,
+        enabled=router.config.telemetry,
     )
     return result.text
 

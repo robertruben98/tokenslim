@@ -36,7 +36,9 @@ class Config:
     # Emit CCR (compressed-content-record) sentinels describing what was
     # dropped so a downstream tool can reason about / reverse the compression.
     ccr: bool = True
-    telemetry: bool = False
+    # Anonymous aggregate telemetry, ON by default (TOKENSLIM_TELEMETRY=off to
+    # disable). The shipped sink is a local no-op stub — no network egress.
+    telemetry: bool = True
 
     # --- CCR store (reversibility) ---
     # Backend for storing dropped originals: "memory" (default) or "sqlite".
