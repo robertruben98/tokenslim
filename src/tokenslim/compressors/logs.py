@@ -20,10 +20,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from ..ccr import text_marker
 from ..config import Config
 from ..detector import ContentType
+
+if TYPE_CHECKING:
+    from ..store import CCRStore
 
 __all__ = ["LogCompressor", "LogFormat", "Level", "classify_line"]
 
@@ -116,8 +120,9 @@ class LogCompressor:
 
     name = "log-compressor"
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, store: CCRStore | None = None) -> None:
         self.config = config or Config()
+        self.store = store
 
     def __call__(self, text: str, content_type: ContentType = ContentType.LOG) -> str:
         raw_lines = text.split("\n")
@@ -154,13 +159,13 @@ class LogCompressor:
         for ln in lines:
             if ln.index in keep:
                 if dropped:
-                    pieces.append(text_marker(dropped))
+                    pieces.append(text_marker(dropped, store=self.store))
                     dropped = []
                 pieces.append(ln.text)
             else:
                 dropped.append(ln.text)
         if dropped:
-            pieces.append(text_marker(dropped))
+            pieces.append(text_marker(dropped, store=self.store))
 
         # Pass 2: conservative run-length dedup of consecutive identical lines
         # that carry no distinguishing id/address (so "ok" repeats collapse but

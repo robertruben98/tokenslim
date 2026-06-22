@@ -59,8 +59,11 @@ messages ─▶ format detect ─▶ per block:
   - **SearchCompressor** — parses grep/ripgrep `file:line:content` (+ `-C`
     context, Windows paths, hyphen filenames), groups hits by file to kill path
     repetition, scores by relevance, and caps the number of files.
-- **CCR** — compressed-content records: tiny sentinels recording what was
-  dropped + a content hash, so compression stays auditable.
+- **CCR** — compress-cache-retrieve: dropped material is cached in a
+  content-addressed store (`InMemoryCCRStore` / `SQLiteCCRStore`) and the output
+  carries a canonical `<<ccr:HASH N reason>>` marker. `retrieve(hash)` returns
+  the exact original, so lossy compression is reversible. `CCRContext` scopes
+  retrieval to markers actually seen in a conversation.
 - **config** — layered: built-in defaults < `TOKENSLIM_*` env vars < per-call
   overrides.
 - **formats** — detect OpenAI vs Anthropic message shapes and convert between
@@ -79,15 +82,33 @@ messages ─▶ format detect ─▶ per block:
 | `TOKENSLIM_CRUSH_KEEP_TAIL` | `3` | SmartCrusher tail items kept |
 | `TOKENSLIM_ERROR_KEYWORDS` | _(builtin)_ | Comma-separated must-keep keywords |
 | `TOKENSLIM_SEARCH_MAX_FILES` | `20` | Max files kept by SearchCompressor |
+| `TOKENSLIM_CCR_BACKEND` | `memory` | CCR store backend (`memory` / `sqlite`) |
+| `TOKENSLIM_CCR_PATH` | `tokenslim_ccr.sqlite3` | SQLite file (sqlite backend) |
+| `TOKENSLIM_CCR_TTL` | _(none)_ | Seconds before a stored original expires |
 
 Per call: `compress(messages, min_bytes=0, model="gpt-4o")`.
 
+## Reversibility (CCR)
+
+```python
+from tokenslim import compress, retrieve, Config
+
+out, stats = compress(messages, options=Config(ccr_backend="sqlite"))
+# out carries <<ccr:HASH N reason>> markers; the dropped originals live in
+# stats.store, retrievable on demand:
+from tokenslim.ccr import find_markers
+for marker in find_markers(out[0]["content"]):
+    original = retrieve(marker.hash, store=stats.store)
+```
+
 ## Status
 
-**M1 Core compressors.** JSON (SmartCrusher), build/test logs, and search
-results have real algorithms. Diff, AST-aware code, and extractive text
-compression — plus query-aware relevance scoring and statistical outlier
-preservation — are tracked for a later milestone and currently pass through.
+**M2 Reversibility (CCR).** Dropped material is now cached and retrievable:
+content-addressed store (in-memory + SQLite, optional TTL), canonical markers,
+`retrieve()` API, and a `CCRContext` tracker. JSON/log/search compressors write
+their dropped originals to the store. Diff, AST-aware code, and extractive text
+compression — plus a distributed Redis CCR backend and query-aware relevance —
+are tracked for later milestones.
 
 ## License
 

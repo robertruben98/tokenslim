@@ -25,11 +25,14 @@ import math
 from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..ccr import json_sentinel
 from ..config import Config
 from ..detector import ContentType
+
+if TYPE_CHECKING:
+    from ..store import CCRStore
 
 __all__ = ["SmartCrusher", "ArrayKind", "FieldStats", "classify_array", "analyze_fields"]
 
@@ -166,8 +169,9 @@ class SmartCrusher:
 
     name = "smartcrusher"
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, store: CCRStore | None = None) -> None:
         self.config = config or Config()
+        self.store = store
 
     # -- public callable -------------------------------------------------
 
@@ -233,7 +237,14 @@ class SmartCrusher:
             elif not sentinel_emitted:
                 # Emit a single sentinel at the first gap (the elided middle).
                 if self.config.ccr:
-                    result.append(json_sentinel(dropped, total=n, kept=len(keep_indices)))
+                    result.append(
+                        json_sentinel(
+                            dropped,
+                            total=n,
+                            kept=len(keep_indices),
+                            store=self.store,
+                        )
+                    )
                 sentinel_emitted = True
         return result
 

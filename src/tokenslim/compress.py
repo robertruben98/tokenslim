@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .config import Config, load_config
 from .detector import ContentType
 from .router import ContentRouter
 from .tokenizer import count_tokens
+
+if TYPE_CHECKING:
+    from .store import CCRStore
 
 __all__ = ["compress", "CompressionStats", "BlockStat"]
 
@@ -43,6 +46,9 @@ class CompressionStats:
     orig_tokens: int = 0
     new_tokens: int = 0
     blocks: list[BlockStat] = field(default_factory=list)
+    # The CCR store holding dropped originals (when CCR is enabled). Pass its
+    # hashes to tokenslim.retrieve.retrieve() / use it with CCRContext.
+    store: CCRStore | None = None
 
     @property
     def ratio(self) -> float:
@@ -152,6 +158,7 @@ def compress(
         return out, stats
 
     router = ContentRouter(config=config)
+    stats.store = router.store
     out = copy.deepcopy(messages)
     for i, msg in enumerate(out):
         if "content" in msg:

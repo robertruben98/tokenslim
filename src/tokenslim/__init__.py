@@ -13,6 +13,13 @@ Quick start::
 
 from __future__ import annotations
 
+from .ccr import (
+    CCRMarker,
+    find_markers,
+    make_marker,
+    parse_marker,
+    strip_markers,
+)
 from .compress import BlockStat, CompressionStats, compress
 from .compressors import LogCompressor, SearchCompressor, SmartCrusher
 from .config import Config, load_config
@@ -23,10 +30,12 @@ from .formats import (
     detect_format,
     openai_to_anthropic,
 )
+from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
+from .store import CCRStore, InMemoryCCRStore, SQLiteCCRStore, get_store
 from .tokenizer import count_tokens, get_tokenizer
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "__version__",
@@ -50,4 +59,16 @@ __all__ = [
     "detect_format",
     "openai_to_anthropic",
     "anthropic_to_openai",
+    # CCR / reversibility
+    "CCRStore",
+    "InMemoryCCRStore",
+    "SQLiteCCRStore",
+    "get_store",
+    "retrieve",
+    "CCRContext",
+    "CCRMarker",
+    "make_marker",
+    "parse_marker",
+    "find_markers",
+    "strip_markers",
 ]
