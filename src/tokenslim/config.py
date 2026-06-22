@@ -33,9 +33,38 @@ class Config:
     enabled: bool = True
     # Compressors allowed to run. None means "all registered compressors".
     enabled_compressors: tuple[str, ...] | None = None
-    # Reserved feature flags (consumed by later milestones).
-    ccr: bool = False
+    # Emit CCR (compressed-content-record) sentinels describing what was
+    # dropped so a downstream tool can reason about / reverse the compression.
+    ccr: bool = True
     telemetry: bool = False
+
+    # --- SmartCrusher (JSON arrays) ---
+    # Items kept from the head and tail of a crushed array.
+    crush_keep_head: int = 5
+    crush_keep_tail: int = 3
+    # Only crush arrays with at least this many items.
+    crush_min_items: int = 12
+    # Substrings (case-insensitive) that mark an item as must-keep.
+    error_keywords: tuple[str, ...] = (
+        "error",
+        "fail",
+        "failed",
+        "failure",
+        "exception",
+        "traceback",
+        "fatal",
+        "critical",
+        "panic",
+        "denied",
+        "timeout",
+        "abort",
+    )
+
+    # --- LogCompressor / SearchCompressor ---
+    # Context lines kept around a kept (important) log line.
+    log_context: int = 1
+    # Maximum number of distinct files kept by the search compressor.
+    search_max_files: int = 20
 
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
@@ -52,7 +81,7 @@ def _coerce(name: str, raw: str) -> Any:
         return raw.strip().lower() in {"1", "true", "yes", "on"}
     if "int" in target:
         return int(raw)
-    if name == "enabled_compressors":
+    if "tuple" in target:
         return tuple(part.strip() for part in raw.split(",") if part.strip())
     return raw
 
