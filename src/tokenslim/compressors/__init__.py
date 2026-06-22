@@ -8,8 +8,16 @@ Build them from a :class:`~tokenslim.config.Config` and register them in a
 
 from __future__ import annotations
 
+from .diff import DiffCompressor
+from .jsonmin import JsonMinifier
 from .logs import LogCompressor
 from .search import SearchCompressor
 from .smartcrusher import SmartCrusher
 
-__all__ = ["SmartCrusher", "LogCompressor", "SearchCompressor"]
+__all__ = [
+    "SmartCrusher",
+    "LogCompressor",
+    "SearchCompressor",
+    "DiffCompressor",
+    "JsonMinifier",
+]

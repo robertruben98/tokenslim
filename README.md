@@ -58,7 +58,19 @@ messages ─▶ format detect ─▶ per block:
     differ by an id/address distinct).
   - **SearchCompressor** — parses grep/ripgrep `file:line:content` (+ `-C`
     context, Windows paths, hyphen filenames), groups hits by file to kill path
-    repetition, scores by relevance, and caps the number of files.
+    repetition, scores by relevance, and caps the number of files. Optional
+    query-aware BM25 re-ranking when `config.query` is set.
+  - **DiffCompressor** — parses unified diffs, caps files by change density,
+    keeps the first/last + highest-churn hunks per file, trims context lines,
+    and CCRs the rest — committing the compaction only when it shrinks the diff
+    below ~0.8 of the original.
+  - **JsonMinifier** — lossless parse → compact re-serialise; keeps the original
+    if not shorter. Usable as a pre-pass or for non-array JSON.
+- **sizer** — `compute_optimal_k(n, target_ratio)`: shared exponential-decay
+  budget helper used to size diff/log/search selections (monotonic, no
+  k=1 overshoot).
+- **relevance** — `BM25Scorer`: zero-dependency query-aware scorer (behind a
+  `Scorer` protocol so an embedding scorer can drop in later).
 - **CCR** — compress-cache-retrieve: dropped material is cached in a
   content-addressed store (`InMemoryCCRStore` / `SQLiteCCRStore`) and the output
   carries a canonical `<<ccr:HASH N reason>>` marker. `retrieve(hash)` returns
@@ -82,6 +94,11 @@ messages ─▶ format detect ─▶ per block:
 | `TOKENSLIM_CRUSH_KEEP_TAIL` | `3` | SmartCrusher tail items kept |
 | `TOKENSLIM_ERROR_KEYWORDS` | _(builtin)_ | Comma-separated must-keep keywords |
 | `TOKENSLIM_SEARCH_MAX_FILES` | `20` | Max files kept by SearchCompressor |
+| `TOKENSLIM_DIFF_MAX_FILES` | `10` | Max files kept by DiffCompressor |
+| `TOKENSLIM_DIFF_MAX_HUNKS_PER_FILE` | `4` | Max hunks kept per file |
+| `TOKENSLIM_DIFF_CONTEXT` | `2` | Context lines kept per hunk edge |
+| `TOKENSLIM_TARGET_RATIO` | `0.2` | Adaptive sizer keep fraction |
+| `TOKENSLIM_QUERY` | _(none)_ | Query for BM25-aware ranking |
 | `TOKENSLIM_CCR_BACKEND` | `memory` | CCR store backend (`memory` / `sqlite`) |
 | `TOKENSLIM_CCR_PATH` | `tokenslim_ccr.sqlite3` | SQLite file (sqlite backend) |
 | `TOKENSLIM_CCR_TTL` | _(none)_ | Seconds before a stored original expires |
@@ -103,12 +120,13 @@ for marker in find_markers(out[0]["content"]):
 
 ## Status
 
-**M2 Reversibility (CCR).** Dropped material is now cached and retrievable:
-content-addressed store (in-memory + SQLite, optional TTL), canonical markers,
-`retrieve()` API, and a `CCRContext` tracker. JSON/log/search compressors write
-their dropped originals to the store. Diff, AST-aware code, and extractive text
-compression — plus a distributed Redis CCR backend and query-aware relevance —
-are tracked for later milestones.
+**Core compressors complete.** JSON (SmartCrusher), build/test logs, search
+results, and unified diffs all have real algorithms; a lossless JSON minifier, a
+shared adaptive sizer, and a BM25 relevance scorer round out the engine. All
+lossy drops are reversible via the CCR store (in-memory + SQLite). Still open:
+AST-aware code compression and extractive text compression; SmartCrusher's
+statistical-outlier / query-anchor keep and stack-trace state machine; and a
+distributed Redis CCR backend.
 
 ## License
 
