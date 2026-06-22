@@ -1,0 +1,71 @@
+"""Layered configuration.
+
+Resolution order (lowest to highest precedence):
+
+1. Built-in defaults (the :class:`Config` field defaults).
+2. Environment variables prefixed ``TOKENSLIM_`` (e.g. ``TOKENSLIM_MIN_BYTES``).
+3. Per-call overrides passed to :func:`compress`.
+
+A config file layer is reserved for a later milestone; the env layer already
+covers the M0 surface.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, fields, replace
+from typing import Any
+
+__all__ = ["Config", "load_config"]
+
+_ENV_PREFIX = "TOKENSLIM_"
+
+
+@dataclass(frozen=True)
+class Config:
+    """Resolved configuration for a compression run."""
+
+    # Payloads smaller than this many bytes are passed through untouched.
+    min_bytes: int = 200
+    # Model name used for token counting (selects the tokenizer backend).
+    model: str | None = None
+    # Master switch — when False, compress() is a no-op passthrough.
+    enabled: bool = True
+    # Compressors allowed to run. None means "all registered compressors".
+    enabled_compressors: tuple[str, ...] | None = None
+    # Reserved feature flags (consumed by later milestones).
+    ccr: bool = False
+    telemetry: bool = False
+
+    def merged(self, **overrides: Any) -> Config:
+        """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
+        clean = {k: v for k, v in overrides.items() if v is not None}
+        return replace(self, **clean) if clean else self
+
+
+def _coerce(name: str, raw: str) -> Any:
+    """Coerce an env string to the type of field ``name`` on :class:`Config`."""
+    field_types = {f.name: f.type for f in fields(Config)}
+    target = field_types.get(name, "str")
+    target = str(target)
+    if "bool" in target:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    if "int" in target:
+        return int(raw)
+    if name == "enabled_compressors":
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
+    return raw
+
+
+def load_config(env: dict[str, str] | None = None, **overrides: Any) -> Config:
+    """Build a :class:`Config` from defaults, env vars, then per-call overrides."""
+    source = os.environ if env is None else env
+    env_values: dict[str, Any] = {}
+    valid = {f.name for f in fields(Config)}
+    for key, value in source.items():
+        if not key.startswith(_ENV_PREFIX):
+            continue
+        name = key[len(_ENV_PREFIX) :].lower()
+        if name in valid:
+            env_values[name] = _coerce(name, value)
+    return Config().merged(**env_values).merged(**overrides)
