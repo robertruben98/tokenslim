@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tokenslim"
-version = "0.2.0"
+version = "0.3.0"
 description = "Context compression layer for LLM agents — compress tool outputs, logs, files & RAG before they hit the model. Reversible, local-first."
 readme = "README.md"
 requires-python = ">=3.10"

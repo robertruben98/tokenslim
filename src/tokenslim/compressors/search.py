@@ -121,6 +121,11 @@ class SearchCompressor:
         if not groups:
             return text  # nothing parseable — leave it alone
 
+        # Optional query-aware re-ranking: blend BM25 relevance of each file's
+        # hits against the query into its base score.
+        if self.config.query:
+            self._apply_relevance(groups, order)
+
         max_files = self.config.search_max_files
         ranked = sorted(groups.values(), key=lambda g: g.score, reverse=True)
         kept = ranked[:max_files]
@@ -158,3 +163,14 @@ class SearchCompressor:
         result = "\n".join(out)
         # Don't expand: if grouping somehow didn't help, keep the original.
         return result if len(result) < len(text) else text
+
+    def _apply_relevance(self, groups: dict[str, _FileGroup], order: list[str]) -> None:
+        """Add a BM25 relevance bonus (per query) to each file group's score."""
+        from ..relevance import BM25Scorer
+
+        docs = ["\n".join(h.content for h in groups[p].hits) for p in order]
+        scores = BM25Scorer().score(self.config.query or "", docs)
+        # Relevance dominates ties but doesn't erase the structural score; scale
+        # it so a strong query match clearly outranks a bare reference.
+        for path, rel in zip(order, scores):
+            groups[path].score += 3.0 * rel

@@ -21,7 +21,13 @@ from .ccr import (
     strip_markers,
 )
 from .compress import BlockStat, CompressionStats, compress
-from .compressors import LogCompressor, SearchCompressor, SmartCrusher
+from .compressors import (
+    DiffCompressor,
+    JsonMinifier,
+    LogCompressor,
+    SearchCompressor,
+    SmartCrusher,
+)
 from .config import Config, load_config
 from .detector import ContentType, DetectionResult, detect_content_type
 from .formats import (
@@ -30,12 +36,14 @@ from .formats import (
     detect_format,
     openai_to_anthropic,
 )
+from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
+from .sizer import compute_optimal_k
 from .store import CCRStore, InMemoryCCRStore, SQLiteCCRStore, get_store
 from .tokenizer import count_tokens, get_tokenizer
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "__version__",
@@ -53,6 +61,11 @@ __all__ = [
     "SmartCrusher",
     "LogCompressor",
     "SearchCompressor",
+    "DiffCompressor",
+    "JsonMinifier",
+    "compute_optimal_k",
+    "BM25Scorer",
+    "Scorer",
     "count_tokens",
     "get_tokenizer",
     "MessageFormat",

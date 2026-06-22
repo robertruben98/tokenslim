@@ -74,6 +74,22 @@ class Config:
     # Maximum number of distinct files kept by the search compressor.
     search_max_files: int = 20
 
+    # --- Adaptive sizer ---
+    # Fraction of items the sizer keeps at the reference size (0 < r <= 1).
+    target_ratio: float = 0.2
+
+    # --- DiffCompressor ---
+    # Max files kept (most-changed first); rest are elided to the CCR store.
+    diff_max_files: int = 10
+    # Max hunks kept per file before extra hunks are elided.
+    diff_max_hunks_per_file: int = 4
+    # Trim each kept hunk's leading/trailing context lines to this many.
+    diff_context: int = 2
+
+    # --- Relevance (BM25) ---
+    # Optional query string; when set, compressors can rank by relevance to it.
+    query: str | None = None
+
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
         clean = {k: v for k, v in overrides.items() if v is not None}
@@ -87,6 +103,8 @@ def _coerce(name: str, raw: str) -> Any:
     target = str(target)
     if "bool" in target:
         return raw.strip().lower() in {"1", "true", "yes", "on"}
+    if "float" in target:
+        return float(raw)
     if "int" in target:
         return int(raw)
     if "tuple" in target:

@@ -93,12 +93,13 @@ def build_registry(
     built) :class:`~tokenslim.store.CCRStore` is shared across compressors so
     dropped originals are retrievable.
     """
-    from .compressors import LogCompressor, SearchCompressor, SmartCrusher
+    from .compressors import DiffCompressor, LogCompressor, SearchCompressor, SmartCrusher
 
     registry = default_registry()
     registry[ContentType.JSON] = (SmartCrusher.name, SmartCrusher(config, store))
     registry[ContentType.LOG] = (LogCompressor.name, LogCompressor(config, store))
     registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config, store))
+    registry[ContentType.DIFF] = (DiffCompressor.name, DiffCompressor(config, store))
     return registry
 
 
