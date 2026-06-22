@@ -85,3 +85,24 @@ __all__ = [
     "find_markers",
     "strip_markers",
 ]
+
+# --- M3: memory & cross-agent context ---
+from .memory import (  # noqa: E402
+    Embedder,
+    Handle,
+    HashingEmbedder,
+    MemoryRecord,
+    MemoryStore,
+    SharedContext,
+    cosine,
+)
+
+__all__ += [
+    "MemoryStore",
+    "MemoryRecord",
+    "SharedContext",
+    "Handle",
+    "Embedder",
+    "HashingEmbedder",
+    "cosine",
+]
