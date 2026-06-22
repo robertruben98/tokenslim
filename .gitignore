@@ -19,6 +19,10 @@ env/
 coverage.xml
 htmlcov/
 
+# CCR store (default local SQLite file)
+*.sqlite3
+tokenslim_ccr.sqlite3
+
 # Editors / OS
 .idea/
 .vscode/
