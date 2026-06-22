@@ -26,6 +26,7 @@ __all__ = [
     "minify_json",
     "passthrough",
     "default_registry",
+    "build_registry",
 ]
 
 Compressor = Callable[[str, ContentType], str]
@@ -61,7 +62,11 @@ def passthrough(text: str, content_type: ContentType) -> str:
 
 
 def default_registry() -> dict[ContentType, tuple[str, Compressor]]:
-    """The built-in compressor registry mapping content type -> (name, fn)."""
+    """Minimal registry: JSON whitespace-minify, everything else passthrough.
+
+    This is the M0 baseline. :func:`build_registry` layers the M1 algorithmic
+    compressors on top and is what :class:`ContentRouter` uses by default.
+    """
     return {
         ContentType.JSON: ("json-minify", minify_json),
         ContentType.CODE: ("passthrough", passthrough),
@@ -73,6 +78,23 @@ def default_registry() -> dict[ContentType, tuple[str, Compressor]]:
     }
 
 
+def build_registry(config: Config) -> dict[ContentType, tuple[str, Compressor]]:
+    """Build the default M1 registry, wiring in the real compressors.
+
+    Imported lazily to keep :mod:`tokenslim.router` free of a hard dependency
+    on the compressors package (avoids an import cycle and keeps the M0 surface
+    importable on its own).
+    """
+    from .compressors import LogCompressor, SearchCompressor, SmartCrusher
+
+    registry = default_registry()
+    crusher = SmartCrusher(config)
+    registry[ContentType.JSON] = (SmartCrusher.name, crusher)
+    registry[ContentType.LOG] = (LogCompressor.name, LogCompressor(config))
+    registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config))
+    return registry
+
+
 class ContentRouter:
     """Routes text blocks to registered compressors."""
 
@@ -82,7 +104,7 @@ class ContentRouter:
         registry: dict[ContentType, tuple[str, Compressor]] | None = None,
     ) -> None:
         self.config = config or Config()
-        self.registry = registry if registry is not None else default_registry()
+        self.registry = registry if registry is not None else build_registry(self.config)
 
     def register(self, content_type: ContentType, name: str, compressor: Compressor) -> None:
         """Register (or replace) the compressor for ``content_type``."""

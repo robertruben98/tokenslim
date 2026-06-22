@@ -28,7 +28,8 @@ def test_router_compresses_large_json():
     router = ContentRouter(config=Config(min_bytes=0))
     result = router.route(big)
     assert result.content_type is ContentType.JSON
-    assert result.compressor == "json-minify"
+    # The default registry routes JSON to the M1 SmartCrusher.
+    assert result.compressor == "smartcrusher"
     assert result.changed is True
     assert len(result.text) < len(big)
 
@@ -37,7 +38,7 @@ def test_router_respects_enabled_compressors_filter():
     big = json.dumps({"items": list(range(100))})
     router = ContentRouter(config=Config(min_bytes=0, enabled_compressors=("passthrough",)))
     result = router.route(big)
-    # json-minify is filtered out, so the block is skipped unchanged.
+    # The JSON compressor (smartcrusher) is not in the allowlist -> skipped.
     assert result.skipped is True
     assert result.text == big
 
