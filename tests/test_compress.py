@@ -27,8 +27,11 @@ def test_compress_reduces_tokens_on_pretty_json():
     assert stats.new_tokens < stats.orig_tokens
     assert 0.0 < stats.ratio <= 1.0
     assert stats.saved_tokens > 0
-    # Output JSON must still be valid / equivalent.
-    assert json.loads(out[0]["content"]) == json.loads(messages[0]["content"])
+    # Output is still valid JSON (SmartCrusher elides the array middle and
+    # leaves a CCR sentinel rather than corrupting the structure).
+    parsed = json.loads(out[0]["content"])
+    assert isinstance(parsed, dict)
+    assert "__tokenslim_ccr__" in out[0]["content"]
 
 
 def test_compress_does_not_mutate_input():
@@ -45,7 +48,7 @@ def test_compress_records_per_block_detail():
     block = stats.blocks[0]
     assert block.message_index == 0
     assert block.content_type is ContentType.JSON
-    assert block.compressor == "json-minify"
+    assert block.compressor == "smartcrusher"
     assert block.changed is True
 
 
@@ -77,7 +80,9 @@ def test_compress_handles_anthropic_content_blocks():
     ]
     out, stats = compress(messages, options=Config(min_bytes=0))
     result_block = out[0]["content"][1]
-    assert json.loads(result_block["content"]) == json.loads(payload)
+    # The tool_result's big number array is crushed; output stays valid JSON.
+    parsed = json.loads(result_block["content"])
+    assert isinstance(parsed, dict) and "rows" in parsed
     assert stats.saved_tokens > 0
 
 

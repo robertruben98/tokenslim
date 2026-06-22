@@ -14,6 +14,7 @@ Quick start::
 from __future__ import annotations
 
 from .compress import BlockStat, CompressionStats, compress
+from .compressors import LogCompressor, SearchCompressor, SmartCrusher
 from .config import Config, load_config
 from .detector import ContentType, DetectionResult, detect_content_type
 from .formats import (
@@ -22,10 +23,10 @@ from .formats import (
     detect_format,
     openai_to_anthropic,
 )
-from .router import ContentRouter, RouteResult
+from .router import ContentRouter, RouteResult, build_registry
 from .tokenizer import count_tokens, get_tokenizer
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
     "__version__",
@@ -39,6 +40,10 @@ __all__ = [
     "detect_content_type",
     "ContentRouter",
     "RouteResult",
+    "build_registry",
+    "SmartCrusher",
+    "LogCompressor",
+    "SearchCompressor",
     "count_tokens",
     "get_tokenizer",
     "MessageFormat",

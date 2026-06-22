@@ -47,6 +47,20 @@ messages ─▶ format detect ─▶ per block:
   detector later.
 - **router** — registry mapping content-type → compressor. Skips payloads below
   a byte threshold and aggregates stats.
+- **compressors** — real algorithms behind the router:
+  - **SmartCrusher** (JSON) — crushes homogeneous arrays: keeps first/last N,
+    drops the redundant middle, and appends a CCR sentinel with the dropped
+    count + content hash. Never drops items containing error keywords; preserves
+    rare status values (anomalies survive).
+  - **LogCompressor** — detects build/test flavour (pytest/npm/cargo/jest/make/
+    generic), classifies each line by level, keeps errors/failures/warnings/
+    summaries with a context window, conservatively dedups (keeps lines that
+    differ by an id/address distinct).
+  - **SearchCompressor** — parses grep/ripgrep `file:line:content` (+ `-C`
+    context, Windows paths, hyphen filenames), groups hits by file to kill path
+    repetition, scores by relevance, and caps the number of files.
+- **CCR** — compressed-content records: tiny sentinels recording what was
+  dropped + a content hash, so compression stays auditable.
 - **config** — layered: built-in defaults < `TOKENSLIM_*` env vars < per-call
   overrides.
 - **formats** — detect OpenAI vs Anthropic message shapes and convert between
@@ -60,15 +74,20 @@ messages ─▶ format detect ─▶ per block:
 | `TOKENSLIM_MODEL` | _(none)_ | Model name for token counting |
 | `TOKENSLIM_ENABLED` | `true` | Master on/off switch |
 | `TOKENSLIM_ENABLED_COMPRESSORS` | _(all)_ | Comma-separated allowlist |
+| `TOKENSLIM_CCR` | `true` | Emit CCR sentinels for dropped material |
+| `TOKENSLIM_CRUSH_KEEP_HEAD` | `5` | SmartCrusher head items kept |
+| `TOKENSLIM_CRUSH_KEEP_TAIL` | `3` | SmartCrusher tail items kept |
+| `TOKENSLIM_ERROR_KEYWORDS` | _(builtin)_ | Comma-separated must-keep keywords |
+| `TOKENSLIM_SEARCH_MAX_FILES` | `20` | Max files kept by SearchCompressor |
 
 Per call: `compress(messages, min_bytes=0, model="gpt-4o")`.
 
 ## Status
 
-**M0 Foundation.** For M0 the only real compressor is JSON whitespace
-minification; other content types pass through unchanged. Real compression
-algorithms (logs, diffs, search results, code) land in M1 behind the same
-router/registry.
+**M1 Core compressors.** JSON (SmartCrusher), build/test logs, and search
+results have real algorithms. Diff, AST-aware code, and extractive text
+compression — plus query-aware relevance scoring and statistical outlier
+preservation — are tracked for a later milestone and currently pass through.
 
 ## License
 
