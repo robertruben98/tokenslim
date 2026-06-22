@@ -15,9 +15,13 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .config import Config
 from .detector import ContentType, detect_content_type
+
+if TYPE_CHECKING:
+    from .store import CCRStore
 
 __all__ = [
     "Compressor",
@@ -78,20 +82,23 @@ def default_registry() -> dict[ContentType, tuple[str, Compressor]]:
     }
 
 
-def build_registry(config: Config) -> dict[ContentType, tuple[str, Compressor]]:
+def build_registry(
+    config: Config, store: CCRStore | None = None
+) -> dict[ContentType, tuple[str, Compressor]]:
     """Build the default M1 registry, wiring in the real compressors.
 
     Imported lazily to keep :mod:`tokenslim.router` free of a hard dependency
     on the compressors package (avoids an import cycle and keeps the M0 surface
-    importable on its own).
+    importable on its own). When ``config.ccr`` is on, the given (or a freshly
+    built) :class:`~tokenslim.store.CCRStore` is shared across compressors so
+    dropped originals are retrievable.
     """
     from .compressors import LogCompressor, SearchCompressor, SmartCrusher
 
     registry = default_registry()
-    crusher = SmartCrusher(config)
-    registry[ContentType.JSON] = (SmartCrusher.name, crusher)
-    registry[ContentType.LOG] = (LogCompressor.name, LogCompressor(config))
-    registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config))
+    registry[ContentType.JSON] = (SmartCrusher.name, SmartCrusher(config, store))
+    registry[ContentType.LOG] = (LogCompressor.name, LogCompressor(config, store))
+    registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config, store))
     return registry
 
 
@@ -102,9 +109,19 @@ class ContentRouter:
         self,
         config: Config | None = None,
         registry: dict[ContentType, tuple[str, Compressor]] | None = None,
+        store: CCRStore | None = None,
     ) -> None:
         self.config = config or Config()
-        self.registry = registry if registry is not None else build_registry(self.config)
+        # A CCR store lets compressors stash dropped originals for retrieval.
+        # Built only when CCR is enabled; reused across all compressors here.
+        if store is None and self.config.ccr:
+            from .store import get_store
+
+            store = get_store(self.config)
+        self.store = store
+        self.registry = (
+            registry if registry is not None else build_registry(self.config, self.store)
+        )
 
     def register(self, content_type: ContentType, name: str, compressor: Compressor) -> None:
         """Register (or replace) the compressor for ``content_type``."""

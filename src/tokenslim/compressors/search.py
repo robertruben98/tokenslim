@@ -15,10 +15,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from ..ccr import TEXT_PREFIX
+from ..ccr import TEXT_PREFIX, content_hash, make_marker
 from ..config import Config
 from ..detector import ContentType
+
+if TYPE_CHECKING:
+    from ..store import CCRStore
 
 __all__ = ["SearchCompressor", "SearchHit", "parse_search_line"]
 
@@ -90,8 +94,9 @@ class SearchCompressor:
 
     name = "search-compressor"
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, store: CCRStore | None = None) -> None:
         self.config = config or Config()
+        self.store = store
 
     def __call__(self, text: str, content_type: ContentType = ContentType.SEARCH) -> str:
         lines = text.split("\n")
@@ -134,7 +139,21 @@ class SearchCompressor:
 
         if dropped:
             n_hits = sum(len(g.hits) for g in dropped)
-            out.append(f"{TEXT_PREFIX} {len(dropped)} files / {n_hits} hits elided (low relevance)")
+            # Persist the dropped hits verbatim so they can be retrieved.
+            dropped_text = "\n".join(
+                f"{g.path}:{h.lineno}{':' if h.is_match else '-'}{h.content}"
+                for g in dropped
+                for h in g.hits
+            )
+            key = (
+                self.store.put(dropped_text)
+                if self.store is not None
+                else content_hash(dropped_text)
+            )
+            out.append(
+                f"{TEXT_PREFIX} {len(dropped)} files / {n_hits} hits elided "
+                f"(low relevance) {make_marker(key, n_hits, 'files-elided')}"
+            )
 
         result = "\n".join(out)
         # Don't expand: if grouping somehow didn't help, keep the original.
