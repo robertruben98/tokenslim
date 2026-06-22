@@ -47,7 +47,12 @@ _CODE_KEYWORD_RE = re.compile(
     r"package|func|fn|impl|module|namespace)\b"
 )
 _CODE_SYMBOL_RE = re.compile(r"[{};]|=>|->|::|==|!=|\+=")
-_SEARCH_HIT_RE = re.compile(r"^\s*\d+[:\-]", re.MULTILINE)  # grep/ripgrep "line:..."
+# grep/ripgrep hits: a bare "line:..." OR the common "file:line:" / "file-line-"
+# form (path may carry a Windows drive colon and hyphens).
+_SEARCH_HIT_RE = re.compile(
+    r"^\s*(?:\d+[:\-]|(?:[A-Za-z]:[\\/])?[\w./\\-]+[:\-]\d+[:\-])",
+    re.MULTILINE,
+)
 _URL_RE = re.compile(r"https?://\S+")
 
 
