@@ -98,6 +98,7 @@ def test_ccr_stashing_and_retrieval():
 
     # Retrieve the stashed content
     from tokenslim.ccr import parse_marker
+
     marker = parse_marker(out)
     assert marker is not None
 
