@@ -32,7 +32,7 @@ from .compressors import (
 from .config import Config, load_config
 from .context import SharedContext
 from .detector import ContentType, DetectionResult, detect_content_type
-from .evals import run_eval_suite
+from .evals import perf_report, run_suite
 from .formats import (
     MessageFormat,
     anthropic_to_openai,
@@ -97,6 +97,7 @@ __all__ = [
     "ProjectMemoryStore",
     "estimate_cost",
     "refresh_pricing",
-    "run_eval_suite",
+    "run_suite",
+    "perf_report",
     "SharedContext",
 ]
