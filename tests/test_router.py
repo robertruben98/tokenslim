@@ -47,6 +47,6 @@ def test_router_passthrough_for_text():
     text = "Just some prose that is definitely longer than the byte threshold here, ok."
     router = ContentRouter(config=Config(min_bytes=0))
     result = router.route(text)
-    assert result.compressor == "passthrough"
+    assert result.compressor == "text-compressor"
     assert result.text == text
     assert result.changed is False

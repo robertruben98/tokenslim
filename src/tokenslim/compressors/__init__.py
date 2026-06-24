@@ -14,6 +14,7 @@ from .jsonmin import JsonMinifier
 from .logs import LogCompressor
 from .search import SearchCompressor
 from .smartcrusher import SmartCrusher
+from .text import TextCompressor
 
 __all__ = [
     "SmartCrusher",
@@ -22,4 +23,6 @@ __all__ = [
     "DiffCompressor",
     "JsonMinifier",
     "CodeCompressor",
+    "TextCompressor",
 ]
+
