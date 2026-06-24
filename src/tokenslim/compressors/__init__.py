@@ -8,6 +8,7 @@ Build them from a :class:`~tokenslim.config.Config` and register them in a
 
 from __future__ import annotations
 
+from .code import CodeCompressor
 from .diff import DiffCompressor
 from .jsonmin import JsonMinifier
 from .logs import LogCompressor
@@ -20,4 +21,5 @@ __all__ = [
     "SearchCompressor",
     "DiffCompressor",
     "JsonMinifier",
+    "CodeCompressor",
 ]
