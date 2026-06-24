@@ -100,3 +100,79 @@ def test_dedup_preserves_distinguishing_ids():
     out = _compress(text)
     # Lines differ by hex id -> must not be collapsed into a single "(xN)".
     assert "(x" not in out
+
+
+def test_python_traceback_capture_complete():
+    # Long log with a traceback in the middle. The traceback should survive.
+    lines = [f"INFO line {i}" for i in range(50)]
+    lines += [
+        "Traceback (most recent call last):",
+        '  File "app.py", line 12, in run',
+        "    main()",
+        '  File "app.py", line 5, in main',
+        '    raise ValueError("invalid arg")',
+        "ValueError: invalid arg",
+    ]
+    lines += [f"INFO line {i + 50}" for i in range(50)]
+    text = "\n".join(lines)
+    out = _compress(text)
+    assert "Traceback (most recent call last):" in out
+    assert "ValueError: invalid arg" in out
+    assert "app.py" in out
+
+
+def test_chained_python_exceptions_capture():
+    lines = [f"INFO line {i}" for i in range(50)]
+    lines += [
+        "Traceback (most recent call last):",
+        '  File "app.py", line 3, in fail',
+        '    raise KeyError("missing")',
+        "KeyError: 'missing'",
+        "",
+        "During handling of the above exception, another exception occurred:",
+        "",
+        "Traceback (most recent call last):",
+        '  File "app.py", line 5, in main',
+        "    fail()",
+        "RuntimeError: failed execution",
+    ]
+    lines += [f"INFO line {i + 50}" for i in range(50)]
+    text = "\n".join(lines)
+    out = _compress(text)
+    assert "KeyError: 'missing'" in out
+    assert "During handling of the above exception" in out
+    assert "RuntimeError: failed execution" in out
+
+
+def test_js_traceback_capture():
+    lines = [f"INFO line {i}" for i in range(50)]
+    lines += [
+        "ReferenceError: x is not defined",
+        "    at run (/src/app.js:10:3)",
+        "    at Object.<anonymous> (/src/app.js:15:1)",
+    ]
+    lines += [f"INFO line {i + 50}" for i in range(50)]
+    text = "\n".join(lines)
+    out = _compress(text)
+    assert "ReferenceError: x is not defined" in out
+    assert "/src/app.js:10:3" in out
+    assert "/src/app.js:15:1" in out
+
+
+def test_traceback_lines_not_deduplicated():
+    # If a traceback has identical looking file lines (e.g. recursive calls),
+    # they should not collapse
+    lines = [f"INFO line {i}" for i in range(50)]
+    lines += [
+        "Traceback (most recent call last):",
+        '  File "app.py", line 10, in recurse',
+        "    recurse()",
+        '  File "app.py", line 10, in recurse',
+        "    recurse()",
+        "RuntimeError: maximum recursion depth exceeded",
+    ]
+    lines += [f"INFO line {i + 50}" for i in range(50)]
+    text = "\n".join(lines)
+    out = _compress(text)
+    assert out.count('File "app.py", line 10, in recurse') == 2
+    assert "(x2)" not in out

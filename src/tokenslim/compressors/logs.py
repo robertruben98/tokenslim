@@ -115,6 +115,103 @@ class _Line:
     level: Level
 
 
+def detect_tracebacks(raw_lines: list[str]) -> set[int]:
+    keep_indices: set[int] = set()
+    n = len(raw_lines)
+
+    # Python traceback patterns
+    py_tb_header = re.compile(r"^\s*Traceback \(most recent call last\):", re.I)
+    py_file_line = re.compile(r"^\s*File\s+\"[^\"]+\",\s+line\s+\d+", re.I)
+    py_chain_msg = re.compile(
+        r"^\s*(?:During handling of the above exception|"
+        r"The above exception was the direct cause of the following exception):",
+        re.I,
+    )
+
+    # JS at-frame pattern: starts with whitespace and "at "
+    js_at_line = re.compile(r"^\s+at\s+\S+")
+
+    i = 0
+    while i < n:
+        line = raw_lines[i]
+
+        # 1. Detect Python Traceback
+        if py_tb_header.match(line):
+            tb_block = [i]
+            i += 1
+            while i < n:
+                curr_line = raw_lines[i]
+                if not curr_line.strip():
+                    j = i + 1
+                    while j < n and not raw_lines[j].strip():
+                        j += 1
+                    is_chain = (py_tb_header.match(raw_lines[j]) if j < n else False) or (
+                        py_chain_msg.match(raw_lines[j]) if j < n else False
+                    )
+                    if j < n and is_chain:
+                        tb_block.extend(range(i, j))
+                        i = j
+                        tb_block.append(i)
+                    else:
+                        break
+                elif (
+                    curr_line.startswith(" ")
+                    or py_file_line.match(curr_line)
+                    or py_chain_msg.match(curr_line)
+                    or py_tb_header.match(curr_line)
+                ):
+                    tb_block.append(i)
+                else:
+                    tb_block.append(i)
+                    # Look ahead to see if there is a chained exception coming up!
+                    j = i + 1
+                    while j < n and not raw_lines[j].strip():
+                        j += 1
+                    is_chain = (py_tb_header.match(raw_lines[j]) if j < n else False) or (
+                        py_chain_msg.match(raw_lines[j]) if j < n else False
+                    )
+                    if j < n and is_chain:
+                        tb_block.extend(range(i + 1, j))
+                        i = j
+                        tb_block.append(i)
+                    else:
+                        i += 1
+                        break
+                i += 1
+
+            keep_indices.update(tb_block)
+            continue
+
+        # 2. Detect JS stack trace
+        if js_at_line.match(line):
+            if i > 0 and (i - 1) not in keep_indices:
+                prev_line = raw_lines[i - 1].strip()
+                if prev_line and not prev_line.startswith("at "):
+                    keep_indices.add(i - 1)
+
+            keep_indices.add(i)
+            i += 1
+            while i < n and (js_at_line.match(raw_lines[i]) or not raw_lines[i].strip()):
+                if not raw_lines[i].strip():
+                    j = i + 1
+                    while j < n and not raw_lines[j].strip():
+                        j += 1
+                    if j < n and js_at_line.match(raw_lines[j]):
+                        keep_indices.update(range(i, j))
+                        i = j
+                        keep_indices.add(i)
+                    else:
+                        break
+                else:
+                    keep_indices.add(i)
+                i += 1
+            continue
+
+        i += 1
+
+    return keep_indices
+
+
 class LogCompressor:
     """Keeps high-signal log lines with context; drops the rest."""
 
@@ -141,11 +238,17 @@ class LogCompressor:
         """Indices to keep: important lines + a context window around each."""
         ctx = self.config.log_context
         important = {ln.index for ln in lines if ln.level >= Level.SUMMARY}
-        keep: set[int] = set()
-        for idx in important:
+
+        raw_texts = [ln.text for ln in lines]
+        traceback_indices = detect_tracebacks(raw_texts)
+
+        keep: set[int] = set(traceback_indices)
+        all_important = important | traceback_indices
+        for idx in all_important:
             lo = max(0, idx - ctx)
             hi = min(len(lines) - 1, idx + ctx)
             keep.update(range(lo, hi + 1))
+
         # Always keep the first and last line for orientation.
         keep.add(0)
         keep.add(len(lines) - 1)
@@ -174,7 +277,12 @@ class LogCompressor:
         last_raw: str | None = None
         run = 1
         for piece in pieces:
-            if piece == last_raw and not _DISTINGUISHING_RE.search(piece):
+            is_tb = (
+                piece.startswith("Traceback (most recent call last):")
+                or piece.strip().startswith("at ")
+                or piece.strip().startswith("File ")
+            )
+            if piece == last_raw and not is_tb and not _DISTINGUISHING_RE.search(piece):
                 run += 1
                 out[-1] = f"{piece}  (x{run})"
             else:

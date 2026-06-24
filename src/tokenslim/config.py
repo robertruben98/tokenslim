@@ -52,6 +52,8 @@ class Config:
     crush_keep_tail: int = 3
     # Only crush arrays with at least this many items.
     crush_min_items: int = 12
+    # Optional hard budget for number of head+tail items to keep.
+    max_items_after_crush: int | None = None
     # Substrings (case-insensitive) that mark an item as must-keep.
     error_keywords: tuple[str, ...] = (
         "error",
