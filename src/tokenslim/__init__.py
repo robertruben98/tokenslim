@@ -39,6 +39,7 @@ from .formats import (
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .memory import ProjectMemoryStore
+from .pricing import estimate_cost, refresh_pricing
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
@@ -92,4 +93,6 @@ __all__ = [
     "find_markers",
     "strip_markers",
     "ProjectMemoryStore",
+    "estimate_cost",
+    "refresh_pricing",
 ]

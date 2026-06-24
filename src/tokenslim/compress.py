@@ -163,6 +163,18 @@ def compress(
     for i, msg in enumerate(out):
         if "content" in msg:
             msg["content"] = _rewrite_content(msg["content"], router, config.model, i, stats)
+
+    # Dispatch anonymous usage telemetry
+    from .telemetry import send_telemetry_event
+
+    content_types = [str(block.content_type) for block in stats.blocks if block.changed]
+    send_telemetry_event(
+        orig_tokens=stats.orig_tokens,
+        new_tokens=stats.new_tokens,
+        model=config.model,
+        content_types=content_types,
+    )
+
     return out, stats
 
 
