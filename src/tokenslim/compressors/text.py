@@ -22,14 +22,87 @@ if TYPE_CHECKING:
 __all__ = ["TextCompressor"]
 
 _STOPWORDS = {
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of",
-    "with", "is", "was", "were", "are", "be", "been", "it", "this", "that",
-    "he", "she", "they", "we", "i", "you", "his", "her", "their", "our", "my",
-    "your", "them", "us", "him", "me", "as", "by", "from", "about", "into",
-    "through", "over", "under", "again", "then", "once", "here", "there", "when",
-    "where", "why", "how", "all", "any", "both", "each", "few", "more", "most",
-    "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so",
-    "than", "too", "very", "can", "will", "just", "should", "would", "now"
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "is",
+    "was",
+    "were",
+    "are",
+    "be",
+    "been",
+    "it",
+    "this",
+    "that",
+    "he",
+    "she",
+    "they",
+    "we",
+    "i",
+    "you",
+    "his",
+    "her",
+    "their",
+    "our",
+    "my",
+    "your",
+    "them",
+    "us",
+    "him",
+    "me",
+    "as",
+    "by",
+    "from",
+    "about",
+    "into",
+    "through",
+    "over",
+    "under",
+    "again",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "any",
+    "both",
+    "each",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "can",
+    "will",
+    "just",
+    "should",
+    "would",
+    "now",
 }
 
 
@@ -130,11 +203,7 @@ class TextCompressor:
             p_sentences = _split_sentences(p_text)
             n_sentences = len(p_sentences)
             for s_idx, s_text in enumerate(p_sentences):
-                info = SentenceInfo(
-                    paragraph_idx=p_idx,
-                    sentence_idx=s_idx,
-                    text=s_text
-                )
+                info = SentenceInfo(paragraph_idx=p_idx, sentence_idx=s_idx, text=s_text)
 
                 # Heuristic scoring
                 score = 1.0
@@ -207,9 +276,7 @@ class TextCompressor:
                     dropped_buffer.append(s_text)
 
             if dropped_buffer:
-                marker = text_marker(
-                    dropped_buffer, reason="prose-elided", store=self.store
-                )
+                marker = text_marker(dropped_buffer, reason="prose-elided", store=self.store)
                 reconstructed_sentences.append(marker)
 
             out_paragraphs.append(" ".join(reconstructed_sentences))

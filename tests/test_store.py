@@ -78,4 +78,52 @@ def test_get_store_factory(tmp_path):
 
 def test_get_store_rejects_unknown_backend():
     with pytest.raises(ValueError, match="unknown CCR backend"):
-        get_store(Config(ccr_backend="redis"))
+        get_store(Config(ccr_backend="postgres"))
+
+
+class FakeRedisClient:
+    def __init__(self):
+        self._data = {}
+
+    def set(self, key, value):
+        self._data[key] = value
+
+    def setex(self, key, ttl, value):
+        self._data[key] = value
+
+    def get(self, key):
+        return self._data.get(key)
+
+    def scan_iter(self, pattern):
+        import fnmatch
+
+        for key in self._data:
+            if fnmatch.fnmatch(key, pattern):
+                yield key
+
+
+def test_redis_ccr_store(monkeypatch):
+    import sys
+    from unittest.mock import MagicMock
+
+    from tokenslim.store import RedisCCRStore
+
+    mock_client = FakeRedisClient()
+    mock_redis = MagicMock()
+    mock_redis.Redis.from_url.return_value = mock_client
+
+    # Inject mock redis module
+    monkeypatch.setitem(sys.modules, "redis", mock_redis)
+
+    store = RedisCCRStore("redis://localhost:6379/0", ttl=60)
+    assert store.url == "redis://localhost:6379/0"
+    assert store._ttl == 60
+
+    h = store.put("hello redis")
+    assert isinstance(h, str)
+    assert store.get(h) == "hello redis"
+    assert len(store) == 1
+
+    # Factory loading
+    redis_store = get_store(Config(ccr_backend="redis", redis_url="redis://localhost:6379/1"))
+    assert isinstance(redis_store, RedisCCRStore)
