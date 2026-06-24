@@ -30,6 +30,182 @@ from typing import TYPE_CHECKING, Any
 from ..ccr import json_sentinel
 from ..config import Config
 from ..detector import ContentType
+from ..relevance import tokenize
+
+_STOP_WORDS = {
+    "a",
+    "about",
+    "above",
+    "after",
+    "again",
+    "against",
+    "all",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "arent",
+    "as",
+    "at",
+    "be",
+    "because",
+    "been",
+    "before",
+    "being",
+    "below",
+    "between",
+    "both",
+    "but",
+    "by",
+    "cant",
+    "cannot",
+    "could",
+    "couldnt",
+    "did",
+    "didnt",
+    "do",
+    "does",
+    "doesnt",
+    "doing",
+    "dont",
+    "down",
+    "during",
+    "each",
+    "few",
+    "for",
+    "from",
+    "further",
+    "had",
+    "hadnt",
+    "has",
+    "hasnt",
+    "have",
+    "havent",
+    "having",
+    "he",
+    "hed",
+    "hell",
+    "hes",
+    "her",
+    "here",
+    "heres",
+    "hers",
+    "herself",
+    "him",
+    "himself",
+    "his",
+    "how",
+    "hows",
+    "i",
+    "id",
+    "ill",
+    "im",
+    "ive",
+    "if",
+    "in",
+    "into",
+    "is",
+    "isnt",
+    "it",
+    "its",
+    "itself",
+    "lets",
+    "me",
+    "more",
+    "most",
+    "mustnt",
+    "my",
+    "myself",
+    "no",
+    "nor",
+    "not",
+    "of",
+    "off",
+    "on",
+    "once",
+    "only",
+    "or",
+    "other",
+    "ought",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "own",
+    "same",
+    "shant",
+    "she",
+    "shed",
+    "shell",
+    "shes",
+    "should",
+    "shouldnt",
+    "so",
+    "some",
+    "such",
+    "than",
+    "that",
+    "thats",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "theres",
+    "these",
+    "they",
+    "theyd",
+    "theyll",
+    "theyre",
+    "theyve",
+    "this",
+    "those",
+    "through",
+    "to",
+    "too",
+    "under",
+    "until",
+    "up",
+    "very",
+    "was",
+    "wasnt",
+    "we",
+    "wed",
+    "well",
+    "were",
+    "weve",
+    "werent",
+    "what",
+    "whats",
+    "when",
+    "whens",
+    "where",
+    "wheres",
+    "which",
+    "while",
+    "who",
+    "whos",
+    "whom",
+    "why",
+    "whys",
+    "with",
+    "wont",
+    "would",
+    "wouldnt",
+    "you",
+    "youd",
+    "youll",
+    "youre",
+    "youve",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+}
 
 if TYPE_CHECKING:
     from ..store import CCRStore
@@ -206,19 +382,35 @@ class SmartCrusher:
             return out if changed else _UNCHANGED
         return _UNCHANGED
 
-    def _crush_array(self, items: list[Any]) -> Any:
-        head = self.config.crush_keep_head
-        tail = self.config.crush_keep_tail
-        n = len(items)
+    def _split_budget(self, k: int) -> tuple[int, int]:
+        if k <= 0:
+            return 0, 0
+        if k == 1:
+            return 1, 0
+        head_ratio = self.config.crush_keep_head
+        tail_ratio = self.config.crush_keep_tail
+        total = head_ratio + tail_ratio
+        if total == 0:
+            return 0, 0
+        head = round(k * head_ratio / total)
+        head = max(0, min(k, head))
+        tail = k - head
+        return head, tail
 
-        # Too short to bother, or keeping head+tail wouldn't drop anything.
-        if n < self.config.crush_min_items or n <= head + tail + 1:
-            # Still recurse into nested arrays/objects.
-            return self._maybe_recurse_children(items)
+    def _crush_array(self, items: list[Any]) -> Any:
+        n = len(items)
+        if self.config.max_items_after_crush is not None:
+            k = min(self.config.max_items_after_crush, n)
+            head, tail = self._split_budget(k)
+            if n <= k:
+                return self._maybe_recurse_children(items)
+        else:
+            head = self.config.crush_keep_head
+            tail = self.config.crush_keep_tail
+            if n < self.config.crush_min_items or n <= head + tail + 1:
+                return self._maybe_recurse_children(items)
 
         kind = classify_array(items)
-        # Only homogeneous arrays get statistically crushed. Mixed/empty arrays
-        # just recurse into their children.
         if kind in (ArrayKind.MIXED, ArrayKind.EMPTY):
             return self._maybe_recurse_children(items)
 
@@ -235,7 +427,6 @@ class SmartCrusher:
             if i in keep_indices:
                 result.append(items[i])
             elif not sentinel_emitted:
-                # Emit a single sentinel at the first gap (the elided middle).
                 if self.config.ccr:
                     result.append(
                         json_sentinel(
@@ -270,7 +461,15 @@ class SmartCrusher:
         tail: int,
     ) -> set[int]:
         n = len(items)
-        keep: set[int] = set(range(head)) | set(range(n - tail, n))
+        keep: set[int] = set(range(head)) | set(range(max(0, n - tail), n))
+
+        # Query-anchor relevance keep
+        anchors = set()
+        if self.config.query:
+            query_terms = tokenize(self.config.query)
+            anchors = {t for t in query_terms if t not in _STOP_WORDS}
+            if not anchors:
+                anchors = set(query_terms)
 
         for i, item in enumerate(items):
             if i in keep:
@@ -280,6 +479,84 @@ class SmartCrusher:
                 continue
             if field_stats and self._has_rare_value(item, field_stats):
                 keep.add(i)
+                continue
+            if anchors:
+                blob = (
+                    item
+                    if isinstance(item, str)
+                    else json.dumps(item, ensure_ascii=False, default=str)
+                ).lower()
+                item_tokens = set(tokenize(blob))
+                if anchors.intersection(item_tokens):
+                    keep.add(i)
+
+        # Anomaly detection (Z-score outliers + variance change points)
+        # 1. Raw numbers array
+        is_num_array = all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in items)
+        if not field_stats and is_num_array:
+            keep.update(self._detect_numeric_anomalies(items))
+
+        # 2. Numeric fields in object arrays
+        if field_stats:
+            for name, fs in field_stats.items():
+                if fs.is_id_like:
+                    continue
+                row_vals = []
+                for row_idx, item in enumerate(items):
+                    if isinstance(item, dict) and name in item:
+                        val = item[name]
+                        if isinstance(val, (int, float)) and not isinstance(val, bool):
+                            row_vals.append((row_idx, float(val)))
+                if len(row_vals) >= 2:
+                    keep.update(self._detect_numeric_anomalies_from_indexed(row_vals))
+
+        return keep
+
+    def _detect_numeric_anomalies(self, nums: list[float | int]) -> set[int]:
+        indexed = [(i, float(x)) for i, x in enumerate(nums)]
+        return self._detect_numeric_anomalies_from_indexed(indexed)
+
+    def _detect_numeric_anomalies_from_indexed(self, indexed: list[tuple[int, float]]) -> set[int]:
+        keep: set[int] = set()
+        n = len(indexed)
+        if n < 2:
+            return keep
+
+        vals = [val for _, val in indexed]
+        mean = sum(vals) / n
+        var = sum((x - mean) ** 2 for x in vals) / n
+        std = math.sqrt(var)
+
+        # 1. Z-score outliers (>2 sigma)
+        if std > 0:
+            for idx, val in indexed:
+                if abs(val - mean) / std > 2.0:
+                    keep.add(idx)
+
+        # 2. Variance change-point detection (CSS algorithm)
+        if n >= 4 and var > 0:
+            y = [val - mean for val in vals]
+            C = []
+            curr = 0.0
+            for val in y:
+                curr += val * val
+                C.append(curr)
+
+            total_sum_sq = C[-1]
+            if total_sum_sq > 0:
+                max_d = -1.0
+                k_max = -1
+                for k in range(n - 1):
+                    d_k = abs(C[k] / total_sum_sq - (k + 1) / n)
+                    if d_k > max_d:
+                        max_d = d_k
+                        k_max = k
+
+                # Check if change-point is significant
+                if max_d > 0.15 and k_max != -1:
+                    keep.add(indexed[k_max][0])
+                    keep.add(indexed[k_max + 1][0])
+
         return keep
 
     def _is_error_item(self, item: Any) -> bool:

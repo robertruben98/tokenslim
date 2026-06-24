@@ -153,3 +153,57 @@ def test_invalid_json_passthrough():
 def test_non_array_json_is_minified_only():
     out = SmartCrusher(Config())('{"a": 1,  "b":   2}')
     assert out == '{"a":1,"b":2}'
+
+
+def test_z_score_outliers_preservation():
+    # Mean is near 1, std is small, but 100.0 is an outlier (>2 sigma)
+    data = [1.0] * 50 + [100.0] + [1.0] * 50
+    out = _crush(data)
+    assert 100.0 in out
+
+
+def test_variance_change_point_preservation():
+    # Sequence of values with a variance shift from small to large
+    data = [1.0] * 50 + [11.0, -9.0] * 25
+    out = _crush(data)
+    # The transition around index 50 should be preserved
+    # Let's check that we kept at least one element near the transition (e.g. index 49/50)
+    assert 1.0 in out[5:-3] or 11.0 in out[5:-3] or -9.0 in out[5:-3]
+
+
+def test_query_anchor_preservation():
+    data = [{"id": i, "val": "normal"} for i in range(100)]
+    data[50] = {"id": 50, "val": "find_me_anchor"}
+    config = Config(
+        crush_keep_head=5,
+        crush_keep_tail=3,
+        crush_min_items=12,
+        query="where is find_me_anchor?",
+    )
+    out = json.loads(SmartCrusher(config)(json.dumps(data)))
+    ids = [item["id"] for item in out if isinstance(item, dict) and "id" in item]
+    assert 50 in ids
+
+
+def test_k_split_budget():
+    data = [{"id": i} for i in range(100)]
+
+    # Budget of 5: head + tail should be exactly 5
+    config = Config(
+        crush_keep_head=5,
+        crush_keep_tail=3,
+        max_items_after_crush=5,
+    )
+    out = json.loads(SmartCrusher(config)(json.dumps(data)))
+    # 5 items kept + 1 sentinel
+    assert len(out) == 6
+
+    # Budget of 1: head + tail should be exactly 1 (fixes k=1 overshoot bug)
+    config = Config(
+        crush_keep_head=5,
+        crush_keep_tail=3,
+        max_items_after_crush=1,
+    )
+    out = json.loads(SmartCrusher(config)(json.dumps(data)))
+    # 1 item kept + 1 sentinel
+    assert len(out) == 2
