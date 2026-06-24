@@ -80,6 +80,11 @@ def doctor() -> None:
 @click.argument("file", type=click.File("r", encoding="utf-8"), default="-")
 def perf(model: str | None, file: Any) -> None:
     """Run a performance savings report on a JSON message array."""
+    if file.name == "<stdin>" and sys.stdin.isatty():
+        from .evals import perf_report
+        click.echo(perf_report(model=model))
+        return
+
     try:
         data = json.load(file)
     except Exception as e:
@@ -165,40 +170,29 @@ def learn() -> None:
 
 @main.command()
 @click.option(
-    "--suite",
-    default="all",
-    type=click.Choice(["all", "gsm8k", "qa"]),
-    help="Evaluation suite name.",
+    "--model",
+    default=None,
+    help="LLM model name for token counting.",
 )
-def evals(suite: str) -> None:
-    """Run accuracy-preservation evaluation harness comparing baseline vs compressed."""
-    click.echo(f"Running quality evaluation suite: {suite}...")
-    from .evals import run_eval_suite
+def evals(model: str | None) -> None:
+    """Run accuracy-preservation evaluation harness (ratio + faithfulness)."""
+    click.echo("Running offline quality evaluation suite...")
+    from .config import Config
+    from .evals import run_suite
 
-    results = run_eval_suite(suite)
+    results = run_suite(config=Config(min_bytes=0, model=model))
+    all_faithful = all(r.faithful for r in results)
 
     click.echo("\n--- Accuracy Preservation Report ---")
-    click.echo(f"Total Fixtures:    {results['total']}")
-    click.echo(
-        f"Baseline Accuracy: {results['baseline_accuracy']:.1%} "
-        f"({results['baseline_correct']}/{results['total']})"
-    )
-    click.echo(
-        f"Compressed Acc:    {results['compressed_accuracy']:.1%} "
-        f"({results['compressed_correct']}/{results['total']})"
-    )
-    click.echo(
-        f"Accuracy Delta:    {(results['compressed_accuracy'] - results['baseline_accuracy']):+.1%}"
-    )
+    for r in results:
+        status = "PASS" if r.faithful else "FAIL"
+        click.echo(f"[{status}] {r.name}: ratio={r.ratio:.1%} drops={r.n_markers}")
+        if r.missing:
+            click.echo(f"        missing must-keep: {r.missing}")
     click.echo("------------------------------------")
-    click.echo(f"Original Tokens:   {results['baseline_tokens']}")
-    click.echo(f"Compressed:        {results['compressed_tokens']}")
-    click.echo(f"Saved Tokens:      {results['saved_tokens']}")
-    click.echo(f"Token Savings:     {results['ratio']:.1%}")
-    click.echo("------------------------------------")
-
-    if results["compressed_correct"] < results["baseline_correct"]:
+    if not all_faithful:
         click.echo("⚠️ Warning: Compression caused accuracy loss on some tasks!", err=True)
+        sys.exit(1)
 
 
 @main.command()
