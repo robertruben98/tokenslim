@@ -21,7 +21,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = []
+dependencies = [
+    "click>=8.0",
+]
+
+[project.scripts]
+tokenslim = "tokenslim.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/robertruben98/tokenslim"
