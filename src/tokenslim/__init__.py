@@ -30,6 +30,7 @@ from .compressors import (
     SmartCrusher,
 )
 from .config import Config, load_config
+from .context import SharedContext
 from .detector import ContentType, DetectionResult, detect_content_type
 from .evals import run_eval_suite
 from .formats import (
@@ -97,4 +98,5 @@ __all__ = [
     "estimate_cost",
     "refresh_pricing",
     "run_eval_suite",
+    "SharedContext",
 ]
