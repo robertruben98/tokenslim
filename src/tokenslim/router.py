@@ -99,6 +99,7 @@ def build_registry(
         LogCompressor,
         SearchCompressor,
         SmartCrusher,
+        TextCompressor,
     )
 
     registry = default_registry()
@@ -107,6 +108,8 @@ def build_registry(
     registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config, store))
     registry[ContentType.DIFF] = (DiffCompressor.name, DiffCompressor(config, store))
     registry[ContentType.CODE] = (CodeCompressor.name, CodeCompressor(config, store))
+    registry[ContentType.MARKDOWN] = (TextCompressor.name, TextCompressor(config, store))
+    registry[ContentType.TEXT] = (TextCompressor.name, TextCompressor(config, store))
     return registry
 
 
