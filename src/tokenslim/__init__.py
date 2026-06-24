@@ -38,6 +38,7 @@ from .formats import (
     openai_to_anthropic,
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
+from .memory import ProjectMemoryStore
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
@@ -90,4 +91,5 @@ __all__ = [
     "parse_marker",
     "find_markers",
     "strip_markers",
+    "ProjectMemoryStore",
 ]
