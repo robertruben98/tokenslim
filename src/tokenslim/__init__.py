@@ -13,6 +13,7 @@ Quick start::
 
 from __future__ import annotations
 
+from .cache import insert_anthropic_cache_control, normalize_dynamic_content
 from .ccr import (
     CCRMarker,
     find_markers,
@@ -36,6 +37,7 @@ from .formats import (
     detect_format,
     openai_to_anthropic,
 )
+from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
@@ -72,6 +74,10 @@ __all__ = [
     "detect_format",
     "openai_to_anthropic",
     "anthropic_to_openai",
+    "with_tokenslim",
+    "TokenSlimLiteLLMCallback",
+    "insert_anthropic_cache_control",
+    "normalize_dynamic_content",
     # CCR / reversibility
     "CCRStore",
     "InMemoryCCRStore",
