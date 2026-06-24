@@ -76,8 +76,9 @@ def doctor() -> None:
 
 
 @main.command()
+@click.option("--model", default=None, help="LLM model name for cost estimation.")
 @click.argument("file", type=click.File("r", encoding="utf-8"), default="-")
-def perf(file: Any) -> None:
+def perf(model: str | None, file: Any) -> None:
     """Run a performance savings report on a JSON message array."""
     try:
         data = json.load(file)
@@ -91,16 +92,42 @@ def perf(file: Any) -> None:
 
     click.echo("Running compression performance analysis...")
     cfg = load_config()
+    model_name = model or cfg.model or "gpt-4o"
     try:
         _, stats = compress(data, options=cfg)
+        from .pricing import estimate_cost
+
+        orig_cost = estimate_cost(model_name, stats.orig_tokens)
+        new_cost = estimate_cost(model_name, stats.new_tokens)
+        saved_cost = orig_cost - new_cost
+
         click.echo("\n--- TokenSlim Savings Report ---")
-        click.echo(f"Original Tokens:  {stats.orig_tokens}")
-        click.echo(f"Compressed:       {stats.new_tokens}")
-        click.echo(f"Saved Tokens:     {stats.saved_tokens}")
+        click.echo(f"Model:            {model_name}")
+        click.echo(f"Original Tokens:  {stats.orig_tokens} (${orig_cost:.4f})")
+        click.echo(f"Compressed:       {stats.new_tokens} (${new_cost:.4f})")
+        click.echo(f"Saved Tokens:     {stats.saved_tokens} (${saved_cost:.4f})")
         click.echo(f"Savings Ratio:    {stats.ratio:.1%}")
         click.echo("--------------------------------")
     except Exception as e:
         click.echo(f"Error during compression: {e}", err=True)
+        sys.exit(1)
+
+
+@main.command("refresh-pricing")
+@click.option(
+    "--url",
+    default="https://raw.githubusercontent.com/robertruben98/tokenslim/main/pricing.json",
+    help="Pricing JSON URL.",
+)
+def refresh_pricing_cmd(url: str) -> None:
+    """Refresh the local model token pricing cache."""
+    click.echo(f"Refreshing pricing cache from {url}...")
+    from .pricing import refresh_pricing
+
+    if refresh_pricing(url):
+        click.echo("✓ Pricing cache updated successfully!")
+    else:
+        click.echo("✗ Error: Failed to download or parse pricing data from URL.", err=True)
         sys.exit(1)
 
 
