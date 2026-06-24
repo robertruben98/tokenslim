@@ -164,10 +164,41 @@ def learn() -> None:
 
 
 @main.command()
-def evals() -> None:
-    """Run accuracy-preservation evaluation harness (Coming Soon)."""
-    click.echo("Running quality evaluation suite...")
-    click.echo("This subcommand is a placeholder and will be fully wired in M4.")
+@click.option(
+    "--suite",
+    default="all",
+    type=click.Choice(["all", "gsm8k", "qa"]),
+    help="Evaluation suite name.",
+)
+def evals(suite: str) -> None:
+    """Run accuracy-preservation evaluation harness comparing baseline vs compressed."""
+    click.echo(f"Running quality evaluation suite: {suite}...")
+    from .evals import run_eval_suite
+
+    results = run_eval_suite(suite)
+
+    click.echo("\n--- Accuracy Preservation Report ---")
+    click.echo(f"Total Fixtures:    {results['total']}")
+    click.echo(
+        f"Baseline Accuracy: {results['baseline_accuracy']:.1%} "
+        f"({results['baseline_correct']}/{results['total']})"
+    )
+    click.echo(
+        f"Compressed Acc:    {results['compressed_accuracy']:.1%} "
+        f"({results['compressed_correct']}/{results['total']})"
+    )
+    click.echo(
+        f"Accuracy Delta:    {(results['compressed_accuracy'] - results['baseline_accuracy']):+.1%}"
+    )
+    click.echo("------------------------------------")
+    click.echo(f"Original Tokens:   {results['baseline_tokens']}")
+    click.echo(f"Compressed:        {results['compressed_tokens']}")
+    click.echo(f"Saved Tokens:      {results['saved_tokens']}")
+    click.echo(f"Token Savings:     {results['ratio']:.1%}")
+    click.echo("------------------------------------")
+
+    if results["compressed_correct"] < results["baseline_correct"]:
+        click.echo("⚠️ Warning: Compression caused accuracy loss on some tasks!", err=True)
 
 
 @main.command()
