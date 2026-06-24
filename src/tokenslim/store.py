@@ -33,6 +33,7 @@ __all__ = [
     "CCRStore",
     "InMemoryCCRStore",
     "SQLiteCCRStore",
+    "RedisCCRStore",
     "get_store",
 ]
 
@@ -135,6 +136,41 @@ class SQLiteCCRStore:
             return self._conn.execute("SELECT COUNT(*) FROM ccr").fetchone()[0]
 
 
+class RedisCCRStore:
+    """Distributed CCR store backed by Redis."""
+
+    def __init__(self, url: str, ttl: int | None = None) -> None:
+        try:
+            import redis
+        except ImportError as e:
+            raise ImportError(
+                "The 'redis' package is required to use the Redis CCR backend. "
+                "Install it with `pip install redis`."
+            ) from e
+        self.url = url
+        self._ttl = ttl
+        self._client = redis.Redis.from_url(url, decode_responses=True)
+
+    def put(self, original: str) -> str:
+        key = content_hash(original)
+        redis_key = f"tokenslim:ccr:{key}"
+        if self._ttl is not None:
+            self._client.setex(redis_key, self._ttl, original)
+        else:
+            self._client.set(redis_key, original)
+        return key
+
+    def get(self, hash: str) -> str | None:
+        redis_key = f"tokenslim:ccr:{hash}"
+        val = self._client.get(redis_key)
+        if isinstance(val, (str, bytes)):
+            return val.decode("utf-8") if isinstance(val, bytes) else val
+        return None
+
+    def __len__(self) -> int:
+        return sum(1 for _ in self._client.scan_iter("tokenslim:ccr:*"))
+
+
 def get_store(config: Config) -> CCRStore:
     """Build the CCR store selected by ``config.ccr_backend``."""
     backend = (config.ccr_backend or "memory").lower()
@@ -142,4 +178,6 @@ def get_store(config: Config) -> CCRStore:
         return InMemoryCCRStore(ttl=config.ccr_ttl)
     if backend == "sqlite":
         return SQLiteCCRStore(config.ccr_path, ttl=config.ccr_ttl)
-    raise ValueError(f"unknown CCR backend {backend!r} (expected 'memory' or 'sqlite')")
+    if backend == "redis":
+        return RedisCCRStore(config.redis_url, ttl=config.ccr_ttl)
+    raise ValueError(f"unknown CCR backend {backend!r} (expected 'memory', 'sqlite', or 'redis')")

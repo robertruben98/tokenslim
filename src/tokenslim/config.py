@@ -39,12 +39,14 @@ class Config:
     telemetry: bool = False
 
     # --- CCR store (reversibility) ---
-    # Backend for storing dropped originals: "memory" (default) or "sqlite".
+    # Backend for storing dropped originals: "memory" (default), "sqlite", or "redis".
     ccr_backend: str = "memory"
     # SQLite database file (only used when ccr_backend == "sqlite").
     ccr_path: str = "tokenslim_ccr.sqlite3"
     # Optional time-to-live (seconds) for stored records; None = keep forever.
     ccr_ttl: int | None = None
+    # Redis URL connection string (only used when ccr_backend == "redis").
+    redis_url: str = "redis://localhost:6379/0"
 
     # --- SmartCrusher (JSON arrays) ---
     # Items kept from the head and tail of a crushed array.
