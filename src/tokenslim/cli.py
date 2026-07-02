@@ -82,6 +82,7 @@ def perf(model: str | None, file: Any) -> None:
     """Run a performance savings report on a JSON message array."""
     if file.name == "<stdin>" and sys.stdin.isatty():
         from .evals import perf_report
+
         click.echo(perf_report(model=model))
         return
 

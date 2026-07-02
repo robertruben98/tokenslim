@@ -49,11 +49,13 @@ def test_shared_context_serialize_deserialize():
 
 
 def test_shared_context_serialize_compressed():
-    sc = SharedContext(items=[
-        "This is a very long paragraph that we want to compress "
-        "for inter-agent context handoff.",
-        "Another separate fact about coding and testing."
-    ])
+    sc = SharedContext(
+        items=[
+            "This is a very long paragraph that we want to compress "
+            "for inter-agent context handoff.",
+            "Another separate fact about coding and testing.",
+        ]
+    )
     payload = sc.serialize(compress=True, target_ratio=0.5)
 
     sc2 = SharedContext.deserialize(payload)
