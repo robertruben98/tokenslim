@@ -1,5 +1,9 @@
 # tokenslim
 
+[![CI](https://github.com/robertruben98/tokenslim/actions/workflows/ci.yml/badge.svg)](https://github.com/robertruben98/tokenslim/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green)
+
 Context compression layer for LLM agents — compress tool outputs, logs, files & RAG before they hit the model. Reversible, local-first.
 
 ## Install
@@ -9,7 +13,7 @@ pip install -e ".[dev]"        # development
 pip install tokenslim          # (once published)
 ```
 
-Optional extras: `tokenizers` (accurate tiktoken counts), `ml` (Magika-based detection).
+Optional extras: `tokenizers` (accurate tiktoken counts), `code` (tree-sitter AST-aware code compression), `redis` (distributed CCR backend), `ml` (Magika-based detection).
 Python 3.10+.
 
 ## Quick start
@@ -19,7 +23,7 @@ from tokenslim import compress
 
 messages = [
     {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "tool", "tool_call_id": "t1", "content": pretty_printed_json_blob},
+    {"role": "tool", "tool_call_id": "t1", "content": '{"users": [' + ", ".join('{"id": %d, "role": "member"}' % i for i in range(500)) + "]}"},
 ]
 
 new_messages, stats = compress(messages)
@@ -66,6 +70,12 @@ messages ─▶ format detect ─▶ per block:
     below ~0.8 of the original.
   - **JsonMinifier** — lossless parse → compact re-serialise; keeps the original
     if not shorter. Usable as a pre-pass or for non-array JSON.
+  - **CodeCompressor** — AST-aware (tree-sitter, Python/JavaScript) body elision:
+    keeps signatures, structure and docstrings, CCRs the collapsed function
+    bodies. Requires the `code` extra; falls back to a safe no-op when the
+    tree-sitter grammars aren't installed.
+  - **TextCompressor** — extractive prose/markdown summarisation: scores
+    sentences/sections and keeps the highest-signal ones, CCRing the rest.
 - **sizer** — `compute_optimal_k(n, target_ratio)`: shared exponential-decay
   budget helper used to size diff/log/search selections (monotonic, no
   k=1 overshoot).
@@ -99,7 +109,7 @@ messages ─▶ format detect ─▶ per block:
 | `TOKENSLIM_DIFF_CONTEXT` | `2` | Context lines kept per hunk edge |
 | `TOKENSLIM_TARGET_RATIO` | `0.2` | Adaptive sizer keep fraction |
 | `TOKENSLIM_QUERY` | _(none)_ | Query for BM25-aware ranking |
-| `TOKENSLIM_CCR_BACKEND` | `memory` | CCR store backend (`memory` / `sqlite`) |
+| `TOKENSLIM_CCR_BACKEND` | `memory` | CCR store backend (`memory` / `sqlite` / `redis`) |
 | `TOKENSLIM_CCR_PATH` | `tokenslim_ccr.sqlite3` | SQLite file (sqlite backend) |
 | `TOKENSLIM_CCR_TTL` | _(none)_ | Seconds before a stored original expires |
 
@@ -120,13 +130,13 @@ for marker in find_markers(out[0]["content"]):
 
 ## Status
 
-**Core compressors complete.** JSON (SmartCrusher), build/test logs, search
-results, and unified diffs all have real algorithms; a lossless JSON minifier, a
-shared adaptive sizer, and a BM25 relevance scorer round out the engine. All
-lossy drops are reversible via the CCR store (in-memory + SQLite). Still open:
-AST-aware code compression and extractive text compression; SmartCrusher's
-statistical-outlier / query-anchor keep and stack-trace state machine; and a
-distributed Redis CCR backend.
+**Compressors complete and router-wired.** JSON (SmartCrusher), build/test logs,
+search results, unified diffs, AST-aware code (tree-sitter), and extractive
+text/markdown all have real algorithms; a lossless JSON minifier, a shared
+adaptive sizer, and a BM25 relevance scorer round out the engine. All lossy drops
+are reversible via the CCR store, available in-memory, SQLite, and distributed
+Redis backends. Still open: SmartCrusher's statistical-outlier / query-anchor
+keep and a dedicated stack-trace state machine.
 
 ## License
 
