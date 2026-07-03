@@ -94,6 +94,16 @@ class Config:
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
 
+    # --- Session capture (opt-in, local-only) ---
+    # Record session events (compress runs, tool calls, outcomes) to local
+    # JSONL for offline mining by `tokenslim learn`. OFF by default.
+    capture: bool = False
+    # Directory for session JSONL files; None means ~/.tokenslim/sessions.
+    capture_path: str | None = None
+    # Include raw message content in captured 'compress' events. OFF by
+    # default for privacy — only token counts and content types are recorded.
+    capture_content: bool = False
+
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
         clean = {k: v for k, v in overrides.items() if v is not None}

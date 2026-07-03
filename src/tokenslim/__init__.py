@@ -14,6 +14,7 @@ Quick start::
 from __future__ import annotations
 
 from .cache import insert_anthropic_cache_control, normalize_dynamic_content
+from .capture import SessionCapture, get_capture, read_sessions
 from .ccr import (
     CCRMarker,
     find_markers,
@@ -100,4 +101,8 @@ __all__ = [
     "run_suite",
     "perf_report",
     "SharedContext",
+    # Session capture (opt-in, local-only)
+    "SessionCapture",
+    "get_capture",
+    "read_sessions",
 ]
