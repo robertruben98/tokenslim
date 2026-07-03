@@ -16,6 +16,18 @@ pip install tokenslim          # (once published)
 Optional extras: `tokenizers` (accurate tiktoken counts), `code` (tree-sitter AST-aware code compression), `redis` (distributed CCR backend), `ml` (Magika-based detection).
 Python 3.10+.
 
+Or use the install scripts (pipx when available, `pip install --user` otherwise;
+both finish by running `tokenslim doctor` to verify):
+
+```bash
+sh install.sh --with-extras      # Linux / macOS ("tokenslim[tokenizers,images,semantic]")
+.\install.ps1 -WithExtras        # Windows PowerShell
+```
+
+**Documentation:** <https://robertruben98.github.io/tokenslim/> — quickstart,
+compressor & config reference, CCR reversibility, caching, integrations, CLI
+and Python API (built with mkdocs-material from `docs/`).
+
 ## Quick start
 
 ```python
