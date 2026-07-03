@@ -103,3 +103,12 @@ def test_semicolon_terminated_code_not_csv():
 def test_quoted_delimiters_still_csv():
     text = 'id,note\n1,"hello, world"\n2,"a, b, and c"\n3,plain\n'
     assert detect_content_type(text).content_type is ContentType.CSV
+
+
+def test_uniform_jsonl_not_csv():
+    # Uniform-schema JSON lines have a constant comma field count too, but
+    # they are JSON payloads — the CSV branch must not steal them.
+    jsonl = "\n".join(f'{{"id": {i}, "name": "item-{i}", "price": {10 + i}}}' for i in range(10))
+    assert detect_content_type(jsonl).content_type is not ContentType.CSV
+    arrays = "\n".join(f'[{i}, "item-{i}", {10 + i}]' for i in range(10))
+    assert detect_content_type(arrays).content_type is not ContentType.CSV

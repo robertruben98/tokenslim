@@ -6,6 +6,8 @@ compressor sniffs the delimiter (``,`` ``;`` tab ``|``), keeps the header plus
 the first/last rows and any outlier rows (numeric columns: |z| > 2.5 or the
 min/max holders), appends a ``# stats`` summary line per numeric column
 (count/min/max/mean), and drops the remaining rows behind a single CCR marker.
+Kept rows are emitted verbatim from the original lines — never re-serialised —
+so the model sees exactly the bytes it would have seen uncompressed.
 
 The marker stores the ORIGINAL full table (not just the dropped rows) because
 the compressed view reorders rows and synthesises stats lines — only the full
@@ -15,7 +17,6 @@ original allows a faithful reconstruction on retrieval.
 from __future__ import annotations
 
 import csv
-import io
 import math
 import statistics
 from typing import TYPE_CHECKING
@@ -78,13 +79,6 @@ def _fmt_num(value: float) -> str:
     return format(value, ".4g")
 
 
-def _fmt_row(row: list[str], delimiter: str) -> str:
-    """Serialise one row with the csv module (quoting-safe)."""
-    buffer = io.StringIO()
-    csv.writer(buffer, delimiter=delimiter, lineterminator="\n").writerow(row)
-    return buffer.getvalue()[:-1]
-
-
 class TabularCompressor:
     """Keeps header, head/tail and outlier rows of a table; drops the rest."""
 
@@ -110,7 +104,12 @@ class TabularCompressor:
         if delimiter is None:
             return text
 
-        rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+        # _sniff_delimiter parsed this same ``lines`` list and required one
+        # line == one record, so ``rows`` maps 1:1 onto ``lines`` and kept rows
+        # can be emitted verbatim below (no re-serialisation, no quote mangling).
+        rows = list(csv.reader(lines, delimiter=delimiter))
+        if len(rows) != len(lines):
+            return text
         width = len(rows[0]) if rows else 0
         # Ragged tables are not compacted — column stats would be meaningless.
         if width < 2 or any(len(row) != width for row in rows):
@@ -132,11 +131,11 @@ class TabularCompressor:
         if elided <= 0:
             return text
 
-        pieces = [_fmt_row(header, delimiter)]
-        pieces += [_fmt_row(data[i], delimiter) for i in sorted(head_idx)]
+        pieces = [lines[0]]
+        pieces += [lines[1 + i] for i in sorted(head_idx)]
         pieces.append(self._marker_line(text, elided))
-        pieces += [_fmt_row(data[i], delimiter) for i in sorted(outlier_idx)]
-        pieces += [_fmt_row(data[i], delimiter) for i in sorted(tail_idx)]
+        pieces += [lines[1 + i] for i in sorted(outlier_idx)]
+        pieces += [lines[1 + i] for i in sorted(tail_idx)]
         for col, values in sorted(numeric_cols.items()):
             name = header[col].strip() or f"col{col + 1}"
             numbers = [v for v in values if v is not None]

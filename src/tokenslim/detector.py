@@ -87,6 +87,10 @@ def _looks_like_csv(lines: list[str]) -> bool:
     """True when >= 3 lines share one delimiter with a constant field count."""
     if len(lines) < 3:
         return False
+    # JSONL guard: uniform-schema JSON lines also show a constant comma count,
+    # but they are JSON payloads, not tables — never steal them.
+    if lines[0].lstrip().startswith(("{", "[")):
+        return False
     sample = lines if len(lines) <= 40 else lines[:20] + lines[-20:]
     return any(_csv_field_count(sample, d) >= 2 for d in _CSV_DELIMITERS)
 

@@ -97,6 +97,21 @@ def test_keep_head_knob_respected():
     assert "2,item-2,12" not in out_lines
 
 
+def test_kept_rows_are_byte_identical_to_original_lines():
+    # Fields with embedded quotes must never be re-serialised: RFC-4180
+    # quote-doubling would corrupt cell content the model then misreads.
+    lines = ["id,note,amount"]
+    for i in range(40):
+        lines.append(f'{i},say "hi-{i}",{10 + (i % 7)}')
+    text = "\n".join(lines)
+    out_lines = _compress(text).splitlines()
+    assert out_lines[0] == lines[0], "header must be verbatim"
+    assert lines[1] in out_lines and lines[-1] in out_lines
+    original = set(lines)
+    kept = [ln for ln in out_lines if not ln.startswith(("#", "[tokenslim:ccr]"))]
+    assert kept and all(ln in original for ln in kept), "kept rows were re-serialised"
+
+
 def test_router_routes_csv_to_tabular():
     router = ContentRouter(config=Config(min_bytes=0))
     result = router.route(_make_csv(60))
