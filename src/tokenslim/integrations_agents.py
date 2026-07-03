@@ -173,7 +173,11 @@ class TokenSlimStrandsHooks:
                 "Install it with: pip install strands-agents"
             ) from exc
 
-        event_cls = getattr(strands_hooks, "BeforeModelInvocationEvent", None)
+        # strands >=1.8 names the event BeforeModelCallEvent; earlier 1.x
+        # releases exposed it as BeforeModelInvocationEvent. Accept either.
+        event_cls = getattr(strands_hooks, "BeforeModelCallEvent", None) or getattr(
+            strands_hooks, "BeforeModelInvocationEvent", None
+        )
         if event_cls is None or not hasattr(registry, "add_callback"):
             return
         registry.add_callback(event_cls, self._before_model_invocation)
@@ -182,16 +186,56 @@ class TokenSlimStrandsHooks:
     register_hooks = register
 
     def _before_model_invocation(self, event: Any) -> None:
-        """Compress ``event.request`` messages in place; failures stay silent."""
+        """Compress the pending conversation in place; failures stay silent.
+
+        The real strands ``BeforeModelCallEvent`` carries the conversation at
+        ``event.agent.messages``; request-shaped events (``event.request`` as
+        a message list, or with a ``.messages`` attribute) are also handled.
+        """
         with contextlib.suppress(Exception):
-            request = getattr(event, "request", None)
-            if isinstance(request, list):
-                messages = request
-            elif isinstance(getattr(request, "messages", None), list):
-                messages = request.messages
-            else:
-                return
+            messages = _event_messages(event)
             if not messages:
                 return
             compressed, _ = compress(messages, self.config)
             messages[:] = compressed
+            _compress_strands_blocks(messages, self.config)
+
+
+def _event_messages(event: Any) -> list[Any] | None:
+    """Locate the mutable message list on a before-model event, if any."""
+    messages = getattr(getattr(event, "agent", None), "messages", None)
+    if isinstance(messages, list):
+        return messages
+    request = getattr(event, "request", None)
+    if isinstance(request, list):
+        return request
+    messages = getattr(request, "messages", None)
+    if isinstance(messages, list):
+        return messages
+    return None
+
+
+def _compress_strands_blocks(messages: list[Any], config: Config | None = None) -> None:
+    """Compress strands-shaped (typeless) content blocks in place.
+
+    Strands content blocks are keyed by kind (``{"text": ...}``,
+    ``{"toolResult": ...}``) and carry no ``"type"`` field, so
+    :func:`tokenslim.compress.compress` passes them through untouched. This
+    pass routes their text through :func:`compress_tool_output` block by
+    block; blocks with a ``"type"`` key were already handled by ``compress``.
+    """
+    for message in messages:
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or "type" in block:
+                continue
+            if isinstance(block.get("text"), str):
+                block["text"] = compress_tool_output(block["text"], config)
+            tool_result = block.get("toolResult")
+            tr_content = tool_result.get("content") if isinstance(tool_result, dict) else None
+            if isinstance(tr_content, list):
+                for sub in tr_content:
+                    if isinstance(sub, dict) and isinstance(sub.get("text"), str):
+                        sub["text"] = compress_tool_output(sub["text"], config)

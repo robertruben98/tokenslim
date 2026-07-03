@@ -222,6 +222,31 @@ def test_strands_register_raises_clean_import_error() -> None:
 
 
 def test_strands_register_with_fake_strands_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Real strands >=1.8 event name.
+    class FakeBeforeModelCallEvent:
+        pass
+
+    fake_hooks = types.ModuleType("strands.hooks")
+    fake_hooks.BeforeModelCallEvent = FakeBeforeModelCallEvent  # type: ignore[attr-defined]
+    fake_strands = types.ModuleType("strands")
+    fake_strands.hooks = fake_hooks  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "strands", fake_strands)
+    monkeypatch.setitem(sys.modules, "strands.hooks", fake_hooks)
+
+    registry = MockHookRegistry()
+    TokenSlimStrandsHooks().register(registry)
+    assert len(registry.callbacks) == 1
+    event_cls, callback = registry.callbacks[0]
+    assert event_cls is FakeBeforeModelCallEvent
+    assert callable(callback)
+
+    # register_hooks (strands' HookProvider protocol name) is the same entry.
+    TokenSlimStrandsHooks().register_hooks(registry)
+    assert len(registry.callbacks) == 2
+
+
+def test_strands_register_with_legacy_event_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pre-1.8 strands releases exposed BeforeModelInvocationEvent instead.
     class FakeBeforeModelInvocationEvent:
         pass
 
@@ -235,13 +260,7 @@ def test_strands_register_with_fake_strands_module(monkeypatch: pytest.MonkeyPat
     registry = MockHookRegistry()
     TokenSlimStrandsHooks().register(registry)
     assert len(registry.callbacks) == 1
-    event_cls, callback = registry.callbacks[0]
-    assert event_cls is FakeBeforeModelInvocationEvent
-    assert callable(callback)
-
-    # register_hooks (strands' HookProvider protocol name) is the same entry.
-    TokenSlimStrandsHooks().register_hooks(registry)
-    assert len(registry.callbacks) == 2
+    assert registry.callbacks[0][0] is FakeBeforeModelInvocationEvent
 
 
 def test_strands_callback_compresses_request_list_in_place() -> None:
@@ -271,10 +290,84 @@ def test_strands_callback_compresses_request_messages_attr() -> None:
     assert "__tokenslim_ccr__" in content
 
 
+class MockAgent:
+    def __init__(self, messages: list[Any]) -> None:
+        self.messages = messages
+
+
+class MockModelCallEvent:
+    """Shape of the real strands BeforeModelCallEvent: conversation at .agent.messages."""
+
+    def __init__(self, agent: Any) -> None:
+        self.agent = agent
+
+
+def test_strands_callback_compresses_agent_messages_strands_shape() -> None:
+    # Real strands message shape: typeless {'text': str} content blocks.
+    hooks = TokenSlimStrandsHooks()
+    original = _big_json_text()
+    messages: list[Any] = [{"role": "user", "content": [{"text": original}]}]
+
+    hooks._before_model_invocation(MockModelCallEvent(MockAgent(messages)))
+    text = messages[0]["content"][0]["text"]
+    assert len(text) < len(original)
+    assert "__tokenslim_ccr__" in text
+
+
+def test_strands_callback_compresses_tool_result_blocks() -> None:
+    original = _big_json_text()
+    messages: list[Any] = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "toolResult": {
+                        "toolUseId": "t1",
+                        "status": "success",
+                        "content": [{"text": original}],
+                    }
+                }
+            ],
+        }
+    ]
+
+    TokenSlimStrandsHooks()._before_model_invocation(MockModelCallEvent(MockAgent(messages)))
+    text = messages[0]["content"][0]["toolResult"]["content"][0]["text"]
+    assert len(text) < len(original)
+    assert "__tokenslim_ccr__" in text
+
+
+def test_strands_callback_small_typeless_blocks_untouched() -> None:
+    hooks = TokenSlimStrandsHooks()
+    messages: list[Any] = [{"role": "user", "content": [{"text": "hi"}]}]
+    hooks._before_model_invocation(MockModelCallEvent(MockAgent(messages)))
+    assert messages[0]["content"][0]["text"] == "hi"
+
+
+@pytest.mark.skipif(not HAS_STRANDS, reason="strands-agents not installed")
+def test_strands_real_add_hook_registers_and_compresses() -> None:
+    from strands.hooks import BeforeModelCallEvent, HookRegistry
+
+    registry = HookRegistry()
+    registry.add_hook(TokenSlimStrandsHooks())
+
+    original = _big_json_text()
+    agent = types.SimpleNamespace(messages=[{"role": "user", "content": [{"text": original}]}])
+    event = BeforeModelCallEvent(agent=agent)
+    assert registry.has_callbacks(), "add_hook registered nothing against real strands"
+
+    registry.invoke_callbacks(event)
+    text = agent.messages[0]["content"][0]["text"]
+    assert len(text) < len(original)
+    assert "__tokenslim_ccr__" in text
+
+
 def test_strands_callback_never_raises_on_garbage_events() -> None:
     hooks = TokenSlimStrandsHooks()
-    hooks._before_model_invocation(object())  # no .request at all
+    hooks._before_model_invocation(object())  # no .agent / .request at all
     hooks._before_model_invocation(MockEvent(request=None))
     hooks._before_model_invocation(MockEvent(request="not messages"))
     hooks._before_model_invocation(MockEvent(request=[]))
     hooks._before_model_invocation(MockEvent(request=[object()]))
+    hooks._before_model_invocation(MockModelCallEvent(agent=None))
+    hooks._before_model_invocation(MockModelCallEvent(MockAgent(messages=[object()])))
