@@ -65,6 +65,12 @@ from .images import (
     reduce_image_tokens,
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
+from .integrations_agents import (
+    TokenSlimStrandsHooks,
+    compress_tool_output,
+    tokenslim_agno_tool_hook,
+    wrap_agno_model,
+)
 from .integrations_langchain import compress_documents, compress_messages, wrap_chat_model
 from .learn import Finding, analyze_sessions, apply_rules, propose_rules
 from .memory import ProjectMemoryStore
@@ -205,4 +211,9 @@ __all__ = [
     "CacheHit",
     "Embedder",
     "SentenceTransformerEmbedder",
+    # Agent-framework hooks (Agno, Strands)
+    "compress_tool_output",
+    "tokenslim_agno_tool_hook",
+    "wrap_agno_model",
+    "TokenSlimStrandsHooks",
 ]
