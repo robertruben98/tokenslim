@@ -73,10 +73,12 @@ def default_registry() -> dict[ContentType, tuple[str, Compressor]]:
     """
     return {
         ContentType.JSON: ("json-minify", minify_json),
+        ContentType.HTML: ("passthrough", passthrough),
         ContentType.CODE: ("passthrough", passthrough),
         ContentType.LOG: ("passthrough", passthrough),
         ContentType.DIFF: ("passthrough", passthrough),
         ContentType.SEARCH: ("passthrough", passthrough),
+        ContentType.CSV: ("passthrough", passthrough),
         ContentType.MARKDOWN: ("passthrough", passthrough),
         ContentType.TEXT: ("passthrough", passthrough),
     }
@@ -96,18 +98,22 @@ def build_registry(
     from .compressors import (
         CodeCompressor,
         DiffCompressor,
+        HtmlExtractor,
         LogCompressor,
         SearchCompressor,
         SmartCrusher,
+        TabularCompressor,
         TextCompressor,
     )
 
     registry = default_registry()
     registry[ContentType.JSON] = (SmartCrusher.name, SmartCrusher(config, store))
+    registry[ContentType.HTML] = (HtmlExtractor.name, HtmlExtractor(config, store))
     registry[ContentType.LOG] = (LogCompressor.name, LogCompressor(config, store))
     registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config, store))
     registry[ContentType.DIFF] = (DiffCompressor.name, DiffCompressor(config, store))
     registry[ContentType.CODE] = (CodeCompressor.name, CodeCompressor(config, store))
+    registry[ContentType.CSV] = (TabularCompressor.name, TabularCompressor(config, store))
     registry[ContentType.MARKDOWN] = (TextCompressor.name, TextCompressor(config, store))
     registry[ContentType.TEXT] = (TextCompressor.name, TextCompressor(config, store))
     return registry

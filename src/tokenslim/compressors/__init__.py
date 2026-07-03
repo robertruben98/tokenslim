@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from .code import CodeCompressor
 from .diff import DiffCompressor
+from .html import HtmlExtractor
 from .jsonmin import JsonMinifier
 from .logs import LogCompressor
 from .search import SearchCompressor
 from .smartcrusher import SmartCrusher
+from .tabular import TabularCompressor
 from .text import TextCompressor
 
 __all__ = [
@@ -24,4 +26,6 @@ __all__ = [
     "JsonMinifier",
     "CodeCompressor",
     "TextCompressor",
+    "TabularCompressor",
+    "HtmlExtractor",
 ]

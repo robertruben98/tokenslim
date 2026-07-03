@@ -13,7 +13,16 @@ Quick start::
 
 from __future__ import annotations
 
-from .cache import insert_anthropic_cache_control, normalize_dynamic_content
+from .cache import (
+    PrefixCacheReport,
+    VolatileSpan,
+    find_volatile_spans,
+    insert_anthropic_cache_control,
+    normalize_dynamic_content,
+    optimize_for_prefix_cache,
+    stabilize_message_order,
+)
+from .capture import SessionCapture, get_capture, read_sessions
 from .ccr import (
     CCRMarker,
     find_markers,
@@ -24,10 +33,12 @@ from .ccr import (
 from .compress import BlockStat, CompressionStats, compress
 from .compressors import (
     DiffCompressor,
+    HtmlExtractor,
     JsonMinifier,
     LogCompressor,
     SearchCompressor,
     SmartCrusher,
+    TabularCompressor,
 )
 from .config import Config, load_config
 from .context import SharedContext
@@ -48,6 +59,12 @@ from .images import (
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .memory import ProjectMemoryStore
+from .predict import (
+    OutputPrediction,
+    extract_output_features,
+    predict_output_tokens,
+    suggest_max_tokens,
+)
 from .pricing import estimate_cost, refresh_pricing
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
@@ -76,6 +93,8 @@ __all__ = [
     "SearchCompressor",
     "DiffCompressor",
     "JsonMinifier",
+    "TabularCompressor",
+    "HtmlExtractor",
     "compute_optimal_k",
     "BM25Scorer",
     "Scorer",
@@ -95,6 +114,11 @@ __all__ = [
     "estimate_image_tokens",
     "plan_image_reduction",
     "reduce_image_tokens",
+    "stabilize_message_order",
+    "optimize_for_prefix_cache",
+    "find_volatile_spans",
+    "PrefixCacheReport",
+    "VolatileSpan",
     # CCR / reversibility
     "CCRStore",
     "InMemoryCCRStore",
@@ -113,4 +137,13 @@ __all__ = [
     "run_suite",
     "perf_report",
     "SharedContext",
+    # Session capture (opt-in, local-only)
+    "SessionCapture",
+    "get_capture",
+    "read_sessions",
+    # Output-length prediction
+    "OutputPrediction",
+    "predict_output_tokens",
+    "extract_output_features",
+    "suggest_max_tokens",
 ]
