@@ -78,6 +78,7 @@ def default_registry() -> dict[ContentType, tuple[str, Compressor]]:
         ContentType.LOG: ("passthrough", passthrough),
         ContentType.DIFF: ("passthrough", passthrough),
         ContentType.SEARCH: ("passthrough", passthrough),
+        ContentType.CSV: ("passthrough", passthrough),
         ContentType.MARKDOWN: ("passthrough", passthrough),
         ContentType.TEXT: ("passthrough", passthrough),
     }
@@ -101,6 +102,7 @@ def build_registry(
         LogCompressor,
         SearchCompressor,
         SmartCrusher,
+        TabularCompressor,
         TextCompressor,
     )
 
@@ -111,6 +113,7 @@ def build_registry(
     registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config, store))
     registry[ContentType.DIFF] = (DiffCompressor.name, DiffCompressor(config, store))
     registry[ContentType.CODE] = (CodeCompressor.name, CodeCompressor(config, store))
+    registry[ContentType.CSV] = (TabularCompressor.name, TabularCompressor(config, store))
     registry[ContentType.MARKDOWN] = (TextCompressor.name, TextCompressor(config, store))
     registry[ContentType.TEXT] = (TextCompressor.name, TextCompressor(config, store))
     return registry

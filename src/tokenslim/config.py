@@ -98,6 +98,13 @@ class Config:
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
 
+    # --- TabularCompressor ---
+    # Data rows kept from the head and tail of a compressed CSV table.
+    csv_keep_head: int = 5
+    csv_keep_tail: int = 3
+    # Max outlier rows (|z| > 2.5 or min/max holders in numeric columns) kept.
+    csv_max_outliers: int = 5
+
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
         clean = {k: v for k, v in overrides.items() if v is not None}
