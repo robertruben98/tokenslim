@@ -123,6 +123,12 @@ class Config:
     # embeddings (see semcache.py): 0.95 mis-serves 5-10% of near-miss pairs.
     semantic_cache_threshold: float = 0.96
 
+    # --- Output reduction ---
+    # Brevity instructions appended to the system message so the model writes
+    # shorter replies: "off" (default), "balanced", or "aggressive". When set,
+    # integration wrappers apply it automatically after compress().
+    output_reduction: str = "off"
+
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
         clean = {k: v for k, v in overrides.items() if v is not None}

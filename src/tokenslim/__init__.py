@@ -67,6 +67,15 @@ from .images import (
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .learn import Finding, analyze_sessions, apply_rules, propose_rules
 from .memory import ProjectMemoryStore
+from .outputs import (
+    AGGRESSIVE_INSTRUCTIONS,
+    BALANCED_INSTRUCTIONS,
+    OUTPUT_REDUCTION_LEVELS,
+    OutputDelta,
+    OutputReductionReport,
+    apply_output_reduction,
+    measure_output_delta,
+)
 from .predict import (
     OutputPrediction,
     extract_output_features,
@@ -161,6 +170,14 @@ __all__ = [
     "predict_output_tokens",
     "extract_output_features",
     "suggest_max_tokens",
+    # Output-token reduction
+    "OUTPUT_REDUCTION_LEVELS",
+    "BALANCED_INSTRUCTIONS",
+    "AGGRESSIVE_INSTRUCTIONS",
+    "OutputReductionReport",
+    "OutputDelta",
+    "apply_output_reduction",
+    "measure_output_delta",
     # Learn (failure mining -> agent rules)
     "Finding",
     "analyze_sessions",
