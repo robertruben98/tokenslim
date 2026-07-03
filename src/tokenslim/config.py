@@ -118,6 +118,10 @@ class Config:
     csv_keep_tail: int = 3
     # Max outlier rows (|z| > 2.5 or min/max holders in numeric columns) kept.
     csv_max_outliers: int = 5
+    # --- Semantic cache ---
+    # Minimum cosine similarity for a SemanticCache hit. Calibrated on real
+    # embeddings (see semcache.py): 0.95 mis-serves 5-10% of near-miss pairs.
+    semantic_cache_threshold: float = 0.96
 
     # --- Output reduction ---
     # Brevity instructions appended to the system message so the model writes
