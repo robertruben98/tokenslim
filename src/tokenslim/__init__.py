@@ -13,6 +13,13 @@ Quick start::
 
 from __future__ import annotations
 
+from .audit import (
+    AuditReport,
+    AuditRow,
+    parse_requests,
+    render_audit_report,
+    run_audit,
+)
 from .cache import (
     PrefixCacheReport,
     VolatileSpan,
@@ -146,4 +153,10 @@ __all__ = [
     "predict_output_tokens",
     "extract_output_features",
     "suggest_max_tokens",
+    # Audit (baseline vs optimized replay)
+    "AuditReport",
+    "AuditRow",
+    "run_audit",
+    "parse_requests",
+    "render_audit_report",
 ]
