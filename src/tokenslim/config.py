@@ -90,6 +90,10 @@ class Config:
     # Trim each kept hunk's leading/trailing context lines to this many.
     diff_context: int = 2
 
+    # --- HtmlExtractor ---
+    # Keep hyperlink targets as "text (url)" instead of dropping the URL.
+    html_keep_links: bool = False
+
     # --- Relevance (BM25) ---
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
@@ -103,6 +107,12 @@ class Config:
     # Include raw message content in captured 'compress' events. OFF by
     # default for privacy — only token counts and content types are recorded.
     capture_content: bool = False
+    # --- TabularCompressor ---
+    # Data rows kept from the head and tail of a compressed CSV table.
+    csv_keep_head: int = 5
+    csv_keep_tail: int = 3
+    # Max outlier rows (|z| > 2.5 or min/max holders in numeric columns) kept.
+    csv_max_outliers: int = 5
 
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
