@@ -83,6 +83,7 @@ from .predict import (
     suggest_max_tokens,
 )
 from .pricing import estimate_cost, refresh_pricing
+from .proxy import TokenSlimProxyServer, make_proxy_server, run_proxy
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
@@ -189,6 +190,10 @@ __all__ = [
     "run_audit",
     "parse_requests",
     "render_audit_report",
+    # Compressing reverse proxy (tokenslim proxy)
+    "TokenSlimProxyServer",
+    "make_proxy_server",
+    "run_proxy",
     # Semantic cache (opt-in; embeddings via any Embedder implementation)
     "SemanticCache",
     "HTTPEmbedder",
