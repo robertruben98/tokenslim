@@ -72,6 +72,7 @@ from .router import ContentRouter, RouteResult, build_registry
 from .semcache import (
     CacheHit,
     Embedder,
+    HTTPEmbedder,
     SemanticCache,
     SentenceTransformerEmbedder,
 )
@@ -154,6 +155,7 @@ __all__ = [
     "suggest_max_tokens",
     # Semantic cache (opt-in; embeddings via any Embedder implementation)
     "SemanticCache",
+    "HTTPEmbedder",
     "CacheHit",
     "Embedder",
     "SentenceTransformerEmbedder",

@@ -53,6 +53,7 @@ __all__ = [
     "ANTONYM_PAIRS",
     "CacheHit",
     "Embedder",
+    "HTTPEmbedder",
     "SemanticCache",
     "SentenceTransformerEmbedder",
 ]
@@ -284,3 +285,41 @@ class SentenceTransformerEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
         vectors = self._model.encode(texts, normalize_embeddings=True)
         return [list(map(float, vec)) for vec in vectors]
+
+
+class HTTPEmbedder:
+    """:class:`Embedder` backed by a remote embedding HTTP service.
+
+    Lets the cache use a GPU on another machine without adding heavy local
+    dependencies. The service contract is one endpoint:
+
+    ``POST {base_url}/embed`` with body ``{"texts": ["...", ...]}`` returning
+    ``{"embeddings": [[...], ...]}`` — one vector per input text.
+
+    Network or protocol failures raise :class:`OSError`; callers that must
+    never fail should catch it and skip caching for that call.
+    """
+
+    def __init__(self, base_url: str, timeout: float = 10.0):
+        self._url = base_url.rstrip("/") + "/embed"
+        self._timeout = timeout
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        import json
+        import urllib.request
+
+        body = json.dumps({"texts": texts}).encode()
+        request = urllib.request.Request(
+            self._url, data=body, headers={"Content-Type": "application/json"}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout) as response:
+                payload = json.loads(response.read().decode())
+        except ValueError as exc:  # malformed JSON body
+            raise OSError(f"embedding service at {self._url} returned invalid JSON") from exc
+        except OSError as exc:
+            raise OSError(f"embedding service at {self._url} failed: {exc}") from exc
+        embeddings = payload.get("embeddings") if isinstance(payload, dict) else None
+        if not isinstance(embeddings, list) or len(embeddings) != len(texts):
+            raise OSError(f"embedding service at {self._url} returned a malformed response")
+        return [[float(value) for value in vector] for vector in embeddings]

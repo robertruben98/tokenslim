@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import math
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from tokenslim import CacheHit, Embedder, SemanticCache, SentenceTransformerEmbedder
+from tokenslim import CacheHit, Embedder, HTTPEmbedder, SemanticCache, SentenceTransformerEmbedder
 from tokenslim.config import load_config
 from tokenslim.semcache import ANTONYM_PAIRS, _lexical_guard
 
@@ -283,3 +286,64 @@ def test_sentence_transformer_embedder_requires_extra():
         pytest.skip("sentence-transformers is installed; ImportError path untestable")
     with pytest.raises(ImportError, match=r"tokenslim\[semantic\]"):
         SentenceTransformerEmbedder()
+
+
+# --- HTTPEmbedder (remote GPU embedding service) ---
+
+
+class _EmbedHandler(BaseHTTPRequestHandler):
+    """Minimal stand-in for a remote embedding service."""
+
+    def do_POST(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length", "0"))
+        texts = json.loads(self.rfile.read(length))["texts"]
+        if self.server.malformed:  # type: ignore[attr-defined]
+            body = json.dumps({"oops": True}).encode()
+        else:
+            body = json.dumps({"embeddings": [[1.0, 0.0] for _ in texts]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        pass
+
+
+@pytest.fixture()
+def embed_server():
+    server = HTTPServer(("127.0.0.1", 0), _EmbedHandler)
+    server.malformed = False  # type: ignore[attr-defined]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield server
+    server.shutdown()
+
+
+def test_http_embedder_round_trip(embed_server):
+    url = f"http://127.0.0.1:{embed_server.server_address[1]}"
+    embedder = HTTPEmbedder(url)
+    vectors = embedder.embed(["hola", "mundo"])
+    assert vectors == [[1.0, 0.0], [1.0, 0.0]]
+    assert isinstance(embedder, Embedder)
+
+
+def test_http_embedder_serves_semantic_cache(embed_server):
+    url = f"http://127.0.0.1:{embed_server.server_address[1]}"
+    cache = SemanticCache(HTTPEmbedder(url), threshold=0.9)
+    cache.put("what is python", "a language")
+    hit = cache.get("what is python, briefly")
+    assert hit is not None and hit.response == "a language"
+
+
+def test_http_embedder_malformed_response_raises(embed_server):
+    embed_server.malformed = True
+    url = f"http://127.0.0.1:{embed_server.server_address[1]}"
+    with pytest.raises(OSError, match="malformed"):
+        HTTPEmbedder(url).embed(["x"])
+
+
+def test_http_embedder_unreachable_raises():
+    with pytest.raises(OSError, match="failed"):
+        HTTPEmbedder("http://127.0.0.1:1", timeout=0.5).embed(["x"])
