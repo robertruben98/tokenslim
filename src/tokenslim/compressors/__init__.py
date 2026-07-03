@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from .code import CodeCompressor
 from .diff import DiffCompressor
+from .html import HtmlExtractor
 from .jsonmin import JsonMinifier
 from .logs import LogCompressor
 from .search import SearchCompressor
@@ -26,4 +27,5 @@ __all__ = [
     "CodeCompressor",
     "TextCompressor",
     "TabularCompressor",
+    "HtmlExtractor",
 ]

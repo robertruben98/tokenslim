@@ -90,6 +90,10 @@ class Config:
     # Trim each kept hunk's leading/trailing context lines to this many.
     diff_context: int = 2
 
+    # --- HtmlExtractor ---
+    # Keep hyperlink targets as "text (url)" instead of dropping the URL.
+    html_keep_links: bool = False
+
     # --- Relevance (BM25) ---
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
