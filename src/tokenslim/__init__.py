@@ -60,6 +60,8 @@ from .images import (
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .memory import ProjectMemoryStore
 from .outputs import (
+    AGGRESSIVE_INSTRUCTIONS,
+    BALANCED_INSTRUCTIONS,
     OUTPUT_REDUCTION_LEVELS,
     OutputDelta,
     OutputReductionReport,
@@ -155,6 +157,8 @@ __all__ = [
     "suggest_max_tokens",
     # Output-token reduction
     "OUTPUT_REDUCTION_LEVELS",
+    "BALANCED_INSTRUCTIONS",
+    "AGGRESSIVE_INSTRUCTIONS",
     "OutputReductionReport",
     "OutputDelta",
     "apply_output_reduction",
