@@ -47,6 +47,9 @@ semantic = ["sentence-transformers>=2.2"]
 agno = ["agno>=1.0"]
 # Strands agent framework (imported lazily inside TokenSlimStrandsHooks.register only).
 strands = ["strands-agents>=1.0"]
+# LangChain classes for integrations_langchain (the wrappers themselves are
+# duck-typed and work without this extra).
+langchain = ["langchain-core>=0.3"]
 # Future extras (reserved; land in later milestones).
 proxy = []
 mcp = []

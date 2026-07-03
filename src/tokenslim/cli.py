@@ -156,10 +156,33 @@ def wrap(cmd: tuple[str, ...]) -> None:
 
 
 @main.command()
-def proxy() -> None:
-    """Start the transparent compression proxy (Coming Soon)."""
-    click.echo("TokenSlim HTTP proxy — transparent context compression.")
-    click.echo("This subcommand is a placeholder and will be fully wired in M7.")
+@click.option(
+    "--port",
+    type=int,
+    default=None,
+    help="Listen port (default: TOKENSLIM_PROXY_PORT or 8787).",
+)
+@click.option(
+    "--upstream",
+    default=None,
+    metavar="URL",
+    help="Upstream base URL (default: TOKENSLIM_UPSTREAM or https://api.openai.com).",
+)
+def proxy(port: int | None, upstream: str | None) -> None:
+    """Run the OpenAI-compatible compressing reverse proxy.
+
+    Forwards requests to the upstream API, compressing the `messages`
+    array of POST /v1/chat/completions bodies on the way through.
+    """
+    from .proxy import run_proxy
+
+    try:
+        run_proxy(port=port, upstream=upstream)
+    except KeyboardInterrupt:
+        click.echo("Proxy stopped.")
+    except OSError as e:
+        click.echo(f"Error starting proxy: {e}", err=True)
+        sys.exit(1)
 
 
 @main.command()

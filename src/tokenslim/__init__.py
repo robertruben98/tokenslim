@@ -71,6 +71,7 @@ from .integrations_agents import (
     tokenslim_agno_tool_hook,
     wrap_agno_model,
 )
+from .integrations_langchain import compress_documents, compress_messages, wrap_chat_model
 from .learn import Finding, analyze_sessions, apply_rules, propose_rules
 from .memory import ProjectMemoryStore
 from .outputs import (
@@ -89,6 +90,7 @@ from .predict import (
     suggest_max_tokens,
 )
 from .pricing import estimate_cost, refresh_pricing
+from .proxy import TokenSlimProxyServer, make_proxy_server, run_proxy
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
@@ -136,6 +138,10 @@ __all__ = [
     "anthropic_to_openai",
     "with_tokenslim",
     "TokenSlimLiteLLMCallback",
+    # LangChain (duck-typed; never imports langchain)
+    "wrap_chat_model",
+    "compress_documents",
+    "compress_messages",
     "insert_anthropic_cache_control",
     "normalize_dynamic_content",
     # Images
@@ -195,6 +201,10 @@ __all__ = [
     "run_audit",
     "parse_requests",
     "render_audit_report",
+    # Compressing reverse proxy (tokenslim proxy)
+    "TokenSlimProxyServer",
+    "make_proxy_server",
+    "run_proxy",
     # Semantic cache (opt-in; embeddings via any Embedder implementation)
     "SemanticCache",
     "HTTPEmbedder",
