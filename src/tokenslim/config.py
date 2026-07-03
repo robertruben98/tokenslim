@@ -94,6 +94,12 @@ class Config:
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
 
+    # --- images ---
+    # Per-image token budget for reduce_image_tokens (None = provider sweet spot).
+    image_max_tokens: int | None = None
+    # Detail level for OpenAI-style image blocks: "auto", "low", or "high".
+    image_detail: str = "auto"
+
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
         clean = {k: v for k, v in overrides.items() if v is not None}
