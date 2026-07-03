@@ -148,7 +148,11 @@ def read_sessions(path: str | os.PathLike[str] | None = None) -> Iterator[dict[s
         return
     for file_path in files:
         try:
-            with open(file_path, encoding="utf-8") as fh:
+            # errors="replace" keeps invalid UTF-8 (e.g. a record truncated
+            # mid-multibyte character by a crash) from raising: only the
+            # corrupt line then fails json.loads and is skipped below, so the
+            # rest of the file — and the walk over later files — survives.
+            with open(file_path, encoding="utf-8", errors="replace") as fh:
                 lines = fh.readlines()
         except OSError:
             continue

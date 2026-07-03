@@ -52,6 +52,16 @@ def test_read_sessions_missing_and_malformed(tmp_path):
     assert list(read_sessions(str(tmp_path))) == [{"ok": 1}]
 
 
+def test_read_sessions_survives_invalid_utf8(tmp_path):
+    # A record truncated mid-multibyte character (kill -9 during record()).
+    corrupt = tmp_path / "aaaa.jsonl"
+    corrupt.write_bytes(b'{"ts": 1.0, "kind": "before"}\n{"t": "\xe6\x97')
+    # Sorts after the corrupt file: must still be reached and yielded.
+    (tmp_path / "zzzz.jsonl").write_text('{"ts": 2.0, "kind": "after"}\n', encoding="utf-8")
+    events = list(read_sessions(str(tmp_path)))
+    assert [e["kind"] for e in events] == ["before", "after"]
+
+
 def test_compress_emits_compress_event(tmp_path):
     cfg = Config(capture=True, capture_path=str(tmp_path), min_bytes=0)
     messages = [{"role": "user", "content": "line one\nline two\nline three"}]
