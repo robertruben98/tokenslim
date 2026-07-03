@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from click.testing import CliRunner
 
 from tokenslim import Finding, analyze_sessions, apply_rules, propose_rules, read_sessions
@@ -202,6 +203,46 @@ def test_apply_rules_updates_only_managed_section(tmp_path):
     assert v2.count(LEARN_START_MARKER) == 1
 
 
+def test_apply_rules_sanitizes_markers_in_rule_text(tmp_path):
+    # Rule text comes from arbitrary session payloads: literal markers in the
+    # block must not break the managed section or its idempotency.
+    target = tmp_path / "CLAUDE.md"
+    nested = "<!-- tokenslim:learn:" + LEARN_END_MARKER + "end -->"
+    block = (
+        f"{RULES_HEADING}\n\n"
+        f"- Beware {LEARN_END_MARKER} in corrections.\n"
+        f"- Nested {nested} splice.\n"
+        f"- Also {LEARN_START_MARKER} in text.\n"
+    )
+    first = apply_rules(block, target, dry_run=False)
+    assert first != ""
+    content = target.read_text(encoding="utf-8")
+    assert content.count(LEARN_START_MARKER) == 1
+    assert content.count(LEARN_END_MARKER) == 1
+    assert "Beware" in content and "splice" in content
+    # Idempotent even with hostile rule text.
+    assert apply_rules(block, target, dry_run=False) == "", "second apply must be a no-op"
+    assert target.read_text(encoding="utf-8") == content
+
+
+def test_apply_rules_refuses_unbalanced_markers(tmp_path):
+    # Orphan start marker (hand edit / merge conflict): rewriting could
+    # delete user content, so apply_rules must refuse and leave the file alone.
+    target = tmp_path / "CLAUDE.md"
+    original = f"# Project\n\n{LEARN_START_MARKER}\nuser content after an orphan marker\n"
+    target.write_text(original, encoding="utf-8")
+    with pytest.raises(ValueError, match="malformed managed section"):
+        apply_rules(f"{RULES_HEADING}\n\n- Rule.", target, dry_run=False)
+    assert target.read_text(encoding="utf-8") == original
+
+    # End marker before start marker is malformed too.
+    reordered = f"{LEARN_END_MARKER}\nmiddle\n{LEARN_START_MARKER}\n"
+    target.write_text(reordered, encoding="utf-8")
+    with pytest.raises(ValueError, match="malformed managed section"):
+        apply_rules(f"{RULES_HEADING}\n\n- Rule.", target)
+    assert target.read_text(encoding="utf-8") == reordered
+
+
 # --- CLI ------------------------------------------------------------------------
 
 
@@ -255,6 +296,31 @@ def test_cli_learn_apply_writes_and_is_idempotent(tmp_path):
     assert again.exit_code == 0, again.output
     assert "already up to date" in again.output
     assert target.read_text(encoding="utf-8") == content
+
+
+def test_cli_learn_non_utf8_target_errors_cleanly(tmp_path):
+    sessions = _seed_capture_dir(tmp_path)
+    target = tmp_path / "CLAUDE.md"
+    target.write_bytes(b"# proyecto\n\ncorrecci\xf3n en latin-1\n")  # not valid UTF-8
+    result = CliRunner().invoke(
+        main, ["learn", "--sessions", str(sessions), "--target", str(target)]
+    )
+    assert result.exit_code == 1, result.output
+    assert f"Error updating {target}" in result.output
+    assert not isinstance(result.exception, UnicodeDecodeError), "must not propagate a traceback"
+
+
+def test_cli_learn_malformed_target_markers_error(tmp_path):
+    sessions = _seed_capture_dir(tmp_path)
+    target = tmp_path / "CLAUDE.md"
+    original = f"{LEARN_START_MARKER}\norphan start, no end marker\n"
+    target.write_text(original, encoding="utf-8")
+    result = CliRunner().invoke(
+        main, ["learn", "--sessions", str(sessions), "--target", str(target), "--apply"]
+    )
+    assert result.exit_code == 1, result.output
+    assert "malformed managed section" in result.output
+    assert target.read_text(encoding="utf-8") == original, "file must be left untouched"
 
 
 def test_cli_learn_events_without_patterns(tmp_path):
