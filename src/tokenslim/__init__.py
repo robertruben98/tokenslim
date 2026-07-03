@@ -49,6 +49,12 @@ from .formats import (
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .memory import ProjectMemoryStore
+from .predict import (
+    OutputPrediction,
+    extract_output_features,
+    predict_output_tokens,
+    suggest_max_tokens,
+)
 from .pricing import estimate_cost, refresh_pricing
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
@@ -113,4 +119,9 @@ __all__ = [
     "run_suite",
     "perf_report",
     "SharedContext",
+    # Output-length prediction
+    "OutputPrediction",
+    "predict_output_tokens",
+    "extract_output_features",
+    "suggest_max_tokens",
 ]
