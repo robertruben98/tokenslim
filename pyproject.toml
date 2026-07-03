@@ -59,6 +59,8 @@ code = [
     "tree-sitter-javascript>=0.21",
 ]
 memory = []
+# Documentation site (mkdocs.yml + docs/): uv run --extra docs mkdocs build --strict
+docs = ["mkdocs-material>=9"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",

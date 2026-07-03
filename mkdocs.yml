@@ -1,0 +1,63 @@
+site_name: TokenSlim
+site_description: >-
+  Context compression layer for LLM agents — compress tool outputs, logs,
+  files & RAG before they hit the model. Reversible, local-first.
+site_url: https://robertruben98.github.io/tokenslim/
+repo_url: https://github.com/robertruben98/tokenslim
+repo_name: robertruben98/tokenslim
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Guides:
+      - Compressors: compressors.md
+      - Reversibility (CCR): reversibility.md
+      - Caching: caching.md
+      - Integrations: integrations.md
+      - Docker: DOCKER.md
+  - Reference:
+      - CLI: cli.md
+      - Python API: api.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.details
+
+plugins:
+  - search
+
+strict: true

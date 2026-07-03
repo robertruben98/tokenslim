@@ -1,0 +1,21 @@
+# TokenSlim
+
+> Context compression layer for LLM agents: it detects the content type of every large text block in an OpenAI/Anthropic-style message array (JSON, logs, search results, diffs, code, HTML, CSV, prose) and routes it to a purpose-built compressor, typically removing 60-95% of tokens. Lossy drops are reversible: originals go to a content-addressed CCR store and a `<<ccr:HASH N reason>>` marker in the output is the retrieval key. Local-first, dependency-light (click + numpy), Python 3.10+.
+
+Install with `pip install tokenslim` (or the repo's `install.sh` / `install.ps1`). The Python entry point is `compress(messages) -> (new_messages, stats)`; the CLI is `tokenslim`.
+
+## Docs
+
+- [Home](https://robertruben98.github.io/tokenslim/): what TokenSlim does, why it works, and real eval numbers (93.8% on JSON, 92.4% on logs, faithfulness-gated)
+- [Quickstart](https://robertruben98.github.io/tokenslim/quickstart/): install + extras, the 5-line compress() example, wrapping an SDK client, and a CLI tour
+- [Compressors](https://robertruben98.github.io/tokenslim/compressors/): every content type's strategy and all Config tuning knobs, plus image token reduction
+- [Reversibility (CCR)](https://robertruben98.github.io/tokenslim/reversibility/): marker format, memory/SQLite/Redis stores, retrieve(), CCRContext-scoped retrieval, faithfulness guarantees
+- [Caching](https://robertruben98.github.io/tokenslim/caching/): prefix-cache shaping for OpenAI/Google/Anthropic, and the semantic response cache (0.96 threshold + lexical guard, remote-GPU HTTPEmbedder)
+- [Integrations](https://robertruben98.github.io/tokenslim/integrations/): OpenAI, Anthropic, LiteLLM, LangChain, Agno, Strands, the compressing reverse proxy, and Docker
+- [CLI reference](https://robertruben98.github.io/tokenslim/cli/): every subcommand with examples — doctor, perf, evals, audit, proxy, wrap, learn, refresh-pricing, install
+- [Python API](https://robertruben98.github.io/tokenslim/api/): the full public export surface, grouped by concern
+
+## Optional
+
+- [TokenSlim in Docker](https://robertruben98.github.io/tokenslim/DOCKER/): build and run the proxy container, healthcheck, and compose examples
+- [GitHub repository](https://github.com/robertruben98/tokenslim): source, issues, and the install scripts
