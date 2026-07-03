@@ -193,7 +193,8 @@ def test_integration_applies_reduction_when_config_set() -> None:
     assert res["messages"][1] == {"role": "user", "content": "hello"}
 
 
-def test_integration_off_by_default() -> None:
+def test_integration_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TOKENSLIM_OUTPUT_REDUCTION", raising=False)
     client = with_tokenslim(_MockOpenAIClient())
     res = client.chat.completions.create(
         model="gpt-4", messages=[{"role": "user", "content": "hello"}]
@@ -223,3 +224,110 @@ async def test_integration_async_applies_reduction() -> None:
     )
     assert res["messages"][0]["role"] == "system"
     assert BALANCED_INSTRUCTIONS in res["messages"][0]["content"]
+
+
+# --- Anthropic integration path (system kwarg, never role="system") ----------
+
+
+class _MockAnthropicMessages:
+    def create(self, model: str, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
+        return {"model": model, "messages": messages, "kwargs": kwargs}
+
+
+class _MockAnthropicClient:
+    def __init__(self) -> None:
+        self.messages = _MockAnthropicMessages()
+
+
+class _MockAsyncAnthropicMessages:
+    async def create(self, model: str, messages: list[dict[str, Any]], **kwargs: Any) -> Any:
+        return {"model": model, "messages": messages, "kwargs": kwargs}
+
+
+class _MockAsyncAnthropicClient:
+    def __init__(self) -> None:
+        self.messages = _MockAsyncAnthropicMessages()
+
+
+def _assert_no_system_role(messages: list[dict[str, Any]]) -> None:
+    roles = {m.get("role") for m in messages}
+    assert "system" not in roles, f"role='system' must never enter Anthropic messages: {roles}"
+    assert roles <= {"user", "assistant"}
+
+
+def test_anthropic_reduction_creates_system_kwarg() -> None:
+    client = with_tokenslim(_MockAnthropicClient(), config=Config(output_reduction="balanced"))
+    res = client.messages.create(
+        model="claude-sonnet-4-5", messages=[{"role": "user", "content": "hello"}]
+    )
+    assert res["kwargs"]["system"] == BALANCED_INSTRUCTIONS
+    _assert_no_system_role(res["messages"])
+
+
+def test_anthropic_reduction_appends_to_str_system() -> None:
+    client = with_tokenslim(_MockAnthropicClient(), config=Config(output_reduction="aggressive"))
+    res = client.messages.create(
+        model="claude-sonnet-4-5",
+        system="Be helpful.",
+        messages=[
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hey"},
+            {"role": "user", "content": "continue"},
+        ],
+    )
+    system = res["kwargs"]["system"]
+    assert system.startswith("Be helpful.")
+    assert AGGRESSIVE_INSTRUCTIONS in system
+    _assert_no_system_role(res["messages"])
+
+
+def test_anthropic_reduction_appends_text_block_to_list_system() -> None:
+    original_system = [
+        {"type": "text", "text": "Be helpful.", "cache_control": {"type": "ephemeral"}}
+    ]
+    snapshot = copy.deepcopy(original_system)
+    client = with_tokenslim(_MockAnthropicClient(), config=Config(output_reduction="balanced"))
+    res = client.messages.create(
+        model="claude-sonnet-4-5",
+        system=original_system,
+        messages=[{"role": "user", "content": "hello"}],
+    )
+    system = res["kwargs"]["system"]
+    assert system[0] == snapshot[0], "existing block (incl. cache_control) must be preserved"
+    assert system[-1] == {"type": "text", "text": BALANCED_INSTRUCTIONS}
+    assert original_system == snapshot, "caller's system list must not be mutated"
+    _assert_no_system_role(res["messages"])
+
+
+def test_anthropic_unrecognized_system_shape_skips_reduction() -> None:
+    weird = {"unexpected": "shape"}
+    client = with_tokenslim(_MockAnthropicClient(), config=Config(output_reduction="balanced"))
+    res = client.messages.create(
+        model="claude-sonnet-4-5", system=weird, messages=[{"role": "user", "content": "hello"}]
+    )
+    assert res["kwargs"]["system"] == {"unexpected": "shape"}
+    _assert_no_system_role(res["messages"])
+
+
+def test_anthropic_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TOKENSLIM_OUTPUT_REDUCTION", raising=False)
+    client = with_tokenslim(_MockAnthropicClient())
+    res = client.messages.create(
+        model="claude-sonnet-4-5", messages=[{"role": "user", "content": "hello"}]
+    )
+    assert "system" not in res["kwargs"]
+    _assert_no_system_role(res["messages"])
+
+
+@pytest.mark.asyncio
+async def test_anthropic_async_reduction_creates_system_kwarg() -> None:
+    client = with_tokenslim(_MockAsyncAnthropicClient(), config=Config(output_reduction="balanced"))
+    res = await client.messages.create(
+        model="claude-sonnet-4-5",
+        system="Be helpful.",
+        messages=[{"role": "user", "content": "hello"}],
+    )
+    system = res["kwargs"]["system"]
+    assert system.startswith("Be helpful.")
+    assert BALANCED_INSTRUCTIONS in system
+    _assert_no_system_role(res["messages"])
