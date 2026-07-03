@@ -1,0 +1,30 @@
+# VCS
+.git
+.github
+
+# Virtual environments
+.venv
+venv
+env
+
+# Python build/cache artifacts
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+coverage.xml
+
+# Not needed inside the image
+tests
+demos
+docs
+uv.lock
+.env
+Dockerfile
+.dockerignore

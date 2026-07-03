@@ -123,6 +123,12 @@ class Config:
     # embeddings (see semcache.py): 0.95 mis-serves 5-10% of near-miss pairs.
     semantic_cache_threshold: float = 0.96
 
+    # --- Proxy (tokenslim proxy) ---
+    # TCP port the compressing reverse proxy listens on.
+    proxy_port: int = 8787
+    # Upstream base URL requests are forwarded to (OpenAI-compatible API).
+    upstream: str = "https://api.openai.com"
+
     # --- Output reduction ---
     # Brevity instructions appended to the system message so the model writes
     # shorter replies: "off" (default), "balanced", or "aggressive". When set,
