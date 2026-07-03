@@ -43,6 +43,9 @@ ml = ["magika>=0.5"]
 images = ["pillow>=10"]
 # Embeddings for the semantic cache (SentenceTransformerEmbedder).
 semantic = ["sentence-transformers>=2.2"]
+# LangChain classes for integrations_langchain (the wrappers themselves are
+# duck-typed and work without this extra).
+langchain = ["langchain-core>=0.3"]
 # Future extras (reserved; land in later milestones).
 proxy = []
 mcp = []

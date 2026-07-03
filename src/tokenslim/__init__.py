@@ -65,6 +65,7 @@ from .images import (
     reduce_image_tokens,
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
+from .integrations_langchain import compress_documents, compress_messages, wrap_chat_model
 from .learn import Finding, analyze_sessions, apply_rules, propose_rules
 from .memory import ProjectMemoryStore
 from .outputs import (
@@ -130,6 +131,10 @@ __all__ = [
     "anthropic_to_openai",
     "with_tokenslim",
     "TokenSlimLiteLLMCallback",
+    # LangChain (duck-typed; never imports langchain)
+    "wrap_chat_model",
+    "compress_documents",
+    "compress_messages",
     "insert_anthropic_cache_control",
     "normalize_dynamic_content",
     # Images
