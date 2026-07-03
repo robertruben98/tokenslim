@@ -209,7 +209,9 @@ def learn(sessions_path: str | None, target: str, apply_changes: bool) -> None:
     block = propose_rules(findings)
     try:
         diff = apply_rules(block, target, dry_run=not apply_changes)
-    except OSError as e:
+    except (OSError, ValueError) as e:
+        # ValueError covers malformed managed-section markers and
+        # UnicodeDecodeError (its subclass) from non-UTF-8 targets.
         click.echo(f"Error updating {target}: {e}", err=True)
         sys.exit(1)
 

@@ -279,6 +279,13 @@ def apply_rules(
     section is replaced in place (idempotent), otherwise the section is
     appended; the rest of the file is never touched. A missing target file
     is treated as empty and created on write.
+
+    Marker substrings inside ``markdown_block`` (rule text mined from
+    arbitrary session payloads) are stripped so the written section always
+    contains exactly one start and one end marker. Raises :class:`ValueError`
+    if the target file's existing markers are unbalanced or reordered
+    (e.g. an orphan start marker from a hand edit) — rewriting such a file
+    could destroy user content, so it is left untouched.
     """
     path = os.fspath(target_path)
     try:
@@ -287,7 +294,22 @@ def apply_rules(
     except FileNotFoundError:
         old = ""
 
-    section = f"{LEARN_START_MARKER}\n{markdown_block.strip()}\n{LEARN_END_MARKER}\n"
+    n_start = old.count(LEARN_START_MARKER)
+    n_end = old.count(LEARN_END_MARKER)
+    malformed = n_start != n_end or n_start > 1
+    if not malformed and n_start == 1:
+        malformed = old.index(LEARN_START_MARKER) > old.index(LEARN_END_MARKER)
+    if malformed:
+        raise ValueError(f"malformed managed section in {path}; fix markers manually")
+
+    # Rule text flows in from arbitrary session payloads: strip any marker
+    # substrings (repeatedly — removal can splice a new marker together) so
+    # the section stays well-formed and re-application stays idempotent.
+    block = markdown_block
+    while LEARN_START_MARKER in block or LEARN_END_MARKER in block:
+        block = block.replace(LEARN_START_MARKER, "").replace(LEARN_END_MARKER, "")
+
+    section = f"{LEARN_START_MARKER}\n{block.strip()}\n{LEARN_END_MARKER}\n"
     pattern = re.compile(
         re.escape(LEARN_START_MARKER) + r".*?" + re.escape(LEARN_END_MARKER) + r"\n?",
         re.DOTALL,
