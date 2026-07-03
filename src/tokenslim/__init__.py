@@ -13,7 +13,15 @@ Quick start::
 
 from __future__ import annotations
 
-from .cache import insert_anthropic_cache_control, normalize_dynamic_content
+from .cache import (
+    PrefixCacheReport,
+    VolatileSpan,
+    find_volatile_spans,
+    insert_anthropic_cache_control,
+    normalize_dynamic_content,
+    optimize_for_prefix_cache,
+    stabilize_message_order,
+)
 from .ccr import (
     CCRMarker,
     find_markers,
@@ -82,6 +90,11 @@ __all__ = [
     "TokenSlimLiteLLMCallback",
     "insert_anthropic_cache_control",
     "normalize_dynamic_content",
+    "stabilize_message_order",
+    "optimize_for_prefix_cache",
+    "find_volatile_spans",
+    "PrefixCacheReport",
+    "VolatileSpan",
     # CCR / reversibility
     "CCRStore",
     "InMemoryCCRStore",
