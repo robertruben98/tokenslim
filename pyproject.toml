@@ -45,6 +45,8 @@ images = ["pillow>=10"]
 semantic = ["sentence-transformers>=2.2"]
 # Agno agent framework (user-side only; tokenslim never imports it in core paths).
 agno = ["agno>=1.0"]
+# Strands agent framework (imported lazily inside TokenSlimStrandsHooks.register only).
+strands = ["strands-agents>=1.0"]
 # Future extras (reserved; land in later milestones).
 proxy = []
 mcp = []
