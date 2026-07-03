@@ -41,6 +41,8 @@ tokenizers = ["tiktoken>=0.5"]
 ml = ["magika>=0.5"]
 # Actual image resizing for reduce_image_tokens (estimates/plans work without it).
 images = ["pillow>=10"]
+# Embeddings for the semantic cache (SentenceTransformerEmbedder).
+semantic = ["sentence-transformers>=2.2"]
 # Future extras (reserved; land in later milestones).
 proxy = []
 mcp = []

@@ -13,6 +13,13 @@ Quick start::
 
 from __future__ import annotations
 
+from .audit import (
+    AuditReport,
+    AuditRow,
+    parse_requests,
+    render_audit_report,
+    run_audit,
+)
 from .cache import (
     PrefixCacheReport,
     VolatileSpan,
@@ -70,6 +77,13 @@ from .pricing import estimate_cost, refresh_pricing
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
+from .semcache import (
+    CacheHit,
+    Embedder,
+    HTTPEmbedder,
+    SemanticCache,
+    SentenceTransformerEmbedder,
+)
 from .sizer import compute_optimal_k
 from .store import CCRStore, InMemoryCCRStore, SQLiteCCRStore, get_store
 from .tokenizer import count_tokens, get_tokenizer
@@ -152,4 +166,16 @@ __all__ = [
     "analyze_sessions",
     "propose_rules",
     "apply_rules",
+    # Audit (baseline vs optimized replay)
+    "AuditReport",
+    "AuditRow",
+    "run_audit",
+    "parse_requests",
+    "render_audit_report",
+    # Semantic cache (opt-in; embeddings via any Embedder implementation)
+    "SemanticCache",
+    "HTTPEmbedder",
+    "CacheHit",
+    "Embedder",
+    "SentenceTransformerEmbedder",
 ]

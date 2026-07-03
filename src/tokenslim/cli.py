@@ -279,5 +279,46 @@ def update() -> None:
     click.echo("This subcommand is a placeholder and will be fully wired in M11.")
 
 
+@main.command()
+@click.option("--model", default=None, help="LLM model name for token counting and cost.")
+@click.option(
+    "--answers",
+    is_flag=True,
+    help="Also replay both variants against an OpenAI-compatible endpoint "
+    "(needs OPENAI_API_KEY; optional OPENAI_BASE_URL) and diff the answers.",
+)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help="Emit the machine-readable JSON report instead of the table.",
+)
+@click.argument("file", type=click.File("r", encoding="utf-8"), default="-")
+def audit(model: str | None, answers: bool, as_json: bool, file: Any) -> None:
+    """Replay requests baseline vs optimized and diff token counts.
+
+    FILE (default: stdin) contains the requests in either shape:
+
+    \b
+      * JSON array — each element a bare messages array or an object like
+        {"messages": [...], "id": "req-1"}. A top-level array of
+        role/content message objects counts as a single request.
+      * JSONL — one request per line (same element shapes).
+    """
+    from .audit import parse_requests, render_audit_report, run_audit
+
+    try:
+        requests = parse_requests(file.read())
+    except Exception as e:
+        click.echo(f"Error reading requests: {e}", err=True)
+        sys.exit(1)
+
+    report = run_audit(requests, config=load_config(), model=model, answers=answers)
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(render_audit_report(report))
+
+
 if __name__ == "__main__":
     main()
