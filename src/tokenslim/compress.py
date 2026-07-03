@@ -175,6 +175,23 @@ def compress(
         content_types=content_types,
     )
 
+    # Opt-in local session capture (see tokenslim.capture, issue #41).
+    if config.capture:
+        from .capture import get_capture
+
+        capture = get_capture(config)
+        if capture is not None:
+            payload: dict[str, Any] = {
+                "orig_tokens": stats.orig_tokens,
+                "new_tokens": stats.new_tokens,
+                "ratio": stats.ratio,
+                "content_types": [block.content_type.value for block in stats.blocks],
+            }
+            if config.capture_content:
+                # Raw content is privacy-sensitive: only with the explicit knob.
+                payload["messages"] = messages
+            capture.record("compress", payload)
+
     return out, stats
 
 

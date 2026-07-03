@@ -98,6 +98,15 @@ class Config:
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
 
+    # --- Session capture (opt-in, local-only) ---
+    # Record session events (compress runs, tool calls, outcomes) to local
+    # JSONL for offline mining by `tokenslim learn`. OFF by default.
+    capture: bool = False
+    # Directory for session JSONL files; None means ~/.tokenslim/sessions.
+    capture_path: str | None = None
+    # Include raw message content in captured 'compress' events. OFF by
+    # default for privacy — only token counts and content types are recorded.
+    capture_content: bool = False
     # --- TabularCompressor ---
     # Data rows kept from the head and tail of a compressed CSV table.
     csv_keep_head: int = 5

@@ -22,6 +22,7 @@ from .cache import (
     optimize_for_prefix_cache,
     stabilize_message_order,
 )
+from .capture import SessionCapture, get_capture, read_sessions
 from .ccr import (
     CCRMarker,
     find_markers,
@@ -123,6 +124,10 @@ __all__ = [
     "run_suite",
     "perf_report",
     "SharedContext",
+    # Session capture (opt-in, local-only)
+    "SessionCapture",
+    "get_capture",
+    "read_sessions",
     # Output-length prediction
     "OutputPrediction",
     "predict_output_tokens",
