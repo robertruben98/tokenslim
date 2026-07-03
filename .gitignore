@@ -11,6 +11,9 @@ dist/
 venv/
 env/
 
+# MkDocs build output (uv run --extra docs mkdocs build)
+site/
+
 # Tooling caches
 .pytest_cache/
 .ruff_cache/
