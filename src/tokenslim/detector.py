@@ -8,6 +8,7 @@ an ML detector (e.g. Magika) can drop in later behind the same function.
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ class ContentType(str, Enum):
     LOG = "log"
     DIFF = "diff"
     SEARCH = "search"
+    CSV = "csv"
     MARKDOWN = "markdown"
     TEXT = "text"
 
@@ -49,6 +51,44 @@ _CODE_KEYWORD_RE = re.compile(
 _CODE_SYMBOL_RE = re.compile(r"[{};]|=>|->|::|==|!=|\+=")
 _SEARCH_HIT_RE = re.compile(r"^\s*\d+[:\-]", re.MULTILINE)  # grep/ripgrep "line:..."
 _URL_RE = re.compile(r"https?://\S+")
+
+
+# Delimiters recognised for tabular (CSV-like) payloads.
+_CSV_DELIMITERS = (",", ";", "\t", "|")
+
+
+def _csv_field_count(lines: list[str], delimiter: str) -> int:
+    """Constant field count of ``lines`` under ``delimiter``; 0 if inconsistent.
+
+    Conservative on purpose: every sampled line must parse to exactly the same
+    number of fields (>= 2), with no multi-line records, so code/prose/log
+    payloads that merely contain the delimiter are not misread as tables.
+    """
+    try:
+        rows = list(csv.reader(lines, delimiter=delimiter))
+    except csv.Error:
+        return 0
+    if len(rows) != len(lines):
+        return 0  # blank lines or quoted multi-line records — not a plain table
+    counts = {len(row) for row in rows}
+    if len(counts) != 1:
+        return 0
+    n_fields = counts.pop()
+    if n_fields < 2:
+        return 0
+    # Reject "delimiter-terminated" lines (e.g. code ending in ';', markdown
+    # pipe-table edges): a constant empty first/last field is not real data.
+    if all(row[0].strip() == "" for row in rows) or all(row[-1].strip() == "" for row in rows):
+        return 0
+    return n_fields
+
+
+def _looks_like_csv(lines: list[str]) -> bool:
+    """True when >= 3 lines share one delimiter with a constant field count."""
+    if len(lines) < 3:
+        return False
+    sample = lines if len(lines) <= 40 else lines[:20] + lines[-20:]
+    return any(_csv_field_count(sample, d) >= 2 for d in _CSV_DELIMITERS)
 
 
 def _looks_like_json(text: str) -> bool:
@@ -80,6 +120,11 @@ def detect_content_type(text: str) -> DetectionResult:
     log_hits = len(_LOG_LINE_RE.findall(text))
     if n_lines >= 2 and log_hits / n_lines >= 0.4:
         return DetectionResult(ContentType.LOG, min(0.95, 0.6 + log_hits / n_lines))
+
+    # Tabular data must be checked BEFORE the search branch: CSV rows with
+    # date-like leading fields ("12-05", "10:30") also match _SEARCH_HIT_RE.
+    if _looks_like_csv(lines):
+        return DetectionResult(ContentType.CSV, min(0.9, 0.6 + n_lines / 50))
 
     search_hits = len(_SEARCH_HIT_RE.findall(text))
     if n_lines >= 3 and search_hits / n_lines >= 0.5:

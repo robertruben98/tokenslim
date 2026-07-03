@@ -63,3 +63,43 @@ def test_detect_plain_text():
 def test_empty_is_text():
     assert detect_content_type("").content_type is ContentType.TEXT
     assert detect_content_type("   \n  ").content_type is ContentType.TEXT
+
+
+def test_detect_csv_comma():
+    text = "id,name,amount\n1,alpha,10\n2,beta,20\n3,gamma,30\n"
+    r = detect_content_type(text)
+    assert r.content_type is ContentType.CSV
+    assert r.confidence > 0.6
+
+
+def test_detect_csv_semicolon_tab_pipe():
+    for delim in (";", "\t", "|"):
+        text = "\n".join(delim.join(("a", "b", "c")) for _ in range(5))
+        assert detect_content_type(text).content_type is ContentType.CSV, repr(delim)
+
+
+def test_csv_with_date_fields_beats_search():
+    # Leading date-like fields also match the grep-hit regex ("2024-...").
+    text = "\n".join(f"2024-12-{d:02d},order-{d},19.99" for d in range(1, 8))
+    assert detect_content_type(text).content_type is ContentType.CSV
+
+
+def test_inconsistent_columns_not_csv():
+    text = "a,b\n1,2,3\njust a line\nx,y\n"
+    assert detect_content_type(text).content_type is not ContentType.CSV
+
+
+def test_two_lines_not_csv():
+    assert detect_content_type("a,b\n1,2").content_type is not ContentType.CSV
+
+
+def test_semicolon_terminated_code_not_csv():
+    code = "const a = 1;\nconst b = 2;\nlet c = a + b;\n"
+    r = detect_content_type(code)
+    assert r.content_type is not ContentType.CSV
+    assert r.content_type is ContentType.CODE
+
+
+def test_quoted_delimiters_still_csv():
+    text = 'id,note\n1,"hello, world"\n2,"a, b, and c"\n3,plain\n'
+    assert detect_content_type(text).content_type is ContentType.CSV

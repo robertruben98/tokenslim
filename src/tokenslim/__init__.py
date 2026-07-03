@@ -28,6 +28,7 @@ from .compressors import (
     LogCompressor,
     SearchCompressor,
     SmartCrusher,
+    TabularCompressor,
 )
 from .config import Config, load_config
 from .context import SharedContext
@@ -69,6 +70,7 @@ __all__ = [
     "SearchCompressor",
     "DiffCompressor",
     "JsonMinifier",
+    "TabularCompressor",
     "compute_optimal_k",
     "BM25Scorer",
     "Scorer",
