@@ -39,6 +39,8 @@ Issues = "https://github.com/robertruben98/tokenslim/issues"
 tokenizers = ["tiktoken>=0.5"]
 # ML-based content-type detection (drop-in for the rule-based detector).
 ml = ["magika>=0.5"]
+# Actual image resizing for reduce_image_tokens (estimates/plans work without it).
+images = ["pillow>=10"]
 # Future extras (reserved; land in later milestones).
 proxy = []
 mcp = []
@@ -57,6 +59,7 @@ dev = [
     "tree-sitter>=0.21",
     "tree-sitter-python>=0.21",
     "tree-sitter-javascript>=0.21",
+    "pillow>=10",
 ]
 
 [tool.hatch.build.targets.wheel]

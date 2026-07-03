@@ -50,6 +50,13 @@ from .formats import (
     detect_format,
     openai_to_anthropic,
 )
+from .images import (
+    ImagePlan,
+    ImageStats,
+    estimate_image_tokens,
+    plan_image_reduction,
+    reduce_image_tokens,
+)
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
 from .memory import ProjectMemoryStore
 from .predict import (
@@ -101,6 +108,12 @@ __all__ = [
     "TokenSlimLiteLLMCallback",
     "insert_anthropic_cache_control",
     "normalize_dynamic_content",
+    # Images
+    "ImagePlan",
+    "ImageStats",
+    "estimate_image_tokens",
+    "plan_image_reduction",
+    "reduce_image_tokens",
     "stabilize_message_order",
     "optimize_for_prefix_cache",
     "find_volatile_spans",

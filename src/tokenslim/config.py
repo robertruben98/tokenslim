@@ -98,6 +98,11 @@ class Config:
     # Optional query string; when set, compressors can rank by relevance to it.
     query: str | None = None
 
+    # --- images ---
+    # Per-image token budget for reduce_image_tokens (None = provider sweet spot).
+    image_max_tokens: int | None = None
+    # Detail level for OpenAI-style image blocks: "auto", "low", or "high".
+    image_detail: str = "auto"
     # --- Session capture (opt-in, local-only) ---
     # Record session events (compress runs, tool calls, outcomes) to local
     # JSONL for offline mining by `tokenslim learn`. OFF by default.
