@@ -76,6 +76,13 @@ from .pricing import estimate_cost, refresh_pricing
 from .relevance import BM25Scorer, Scorer
 from .retrieve import CCRContext, retrieve
 from .router import ContentRouter, RouteResult, build_registry
+from .semcache import (
+    CacheHit,
+    Embedder,
+    HTTPEmbedder,
+    SemanticCache,
+    SentenceTransformerEmbedder,
+)
 from .sizer import compute_optimal_k
 from .store import CCRStore, InMemoryCCRStore, SQLiteCCRStore, get_store
 from .tokenizer import count_tokens, get_tokenizer
@@ -159,4 +166,10 @@ __all__ = [
     "run_audit",
     "parse_requests",
     "render_audit_report",
+    # Semantic cache (opt-in; embeddings via any Embedder implementation)
+    "SemanticCache",
+    "HTTPEmbedder",
+    "CacheHit",
+    "Embedder",
+    "SentenceTransformerEmbedder",
 ]
