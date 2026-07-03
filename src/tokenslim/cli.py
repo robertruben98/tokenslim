@@ -163,10 +163,66 @@ def proxy() -> None:
 
 
 @main.command()
-def learn() -> None:
-    """Mine failure logs and generate learning rules (Coming Soon)."""
-    click.echo("Mining failures to write agent rules...")
-    click.echo("This subcommand is a placeholder and will be fully wired in M5.")
+@click.option(
+    "--sessions",
+    "sessions_path",
+    default=None,
+    metavar="PATH",
+    help="Capture directory or JSONL file to mine (default: ~/.tokenslim/sessions).",
+)
+@click.option(
+    "--target",
+    default="CLAUDE.md",
+    show_default=True,
+    metavar="PATH",
+    help="Rules file to update (CLAUDE.md, AGENTS.md, or any path).",
+)
+@click.option(
+    "--apply",
+    "apply_changes",
+    is_flag=True,
+    default=False,
+    help="Write the learned-rules section to the target (default: preview only).",
+)
+def learn(sessions_path: str | None, target: str, apply_changes: bool) -> None:
+    """Mine captured session failures into agent rules (CLAUDE.md/AGENTS.md)."""
+    from .capture import read_sessions
+    from .learn import analyze_sessions, apply_rules, propose_rules
+
+    events = list(read_sessions(sessions_path))
+    if not events:
+        click.echo("no sessions found — enable capture with TOKENSLIM_CAPTURE=1 and retry.")
+        return
+
+    findings = analyze_sessions(events)
+    if not findings:
+        click.echo(f"Analyzed {len(events)} events: no recurring failure patterns found.")
+        return
+
+    click.echo(f"Found {len(findings)} pattern(s) in {len(events)} events:")
+    for finding in findings:
+        click.echo(
+            f"- [{finding.kind}] x{finding.evidence_count} in {len(finding.sessions)} "
+            f"session(s), confidence {finding.confidence:.2f}: {finding.proposed_rule}"
+        )
+
+    block = propose_rules(findings)
+    try:
+        diff = apply_rules(block, target, dry_run=not apply_changes)
+    except (OSError, ValueError) as e:
+        # ValueError covers malformed managed-section markers and
+        # UnicodeDecodeError (its subclass) from non-UTF-8 targets.
+        click.echo(f"Error updating {target}: {e}", err=True)
+        sys.exit(1)
+
+    if not diff:
+        click.echo(f"\n{target} is already up to date.")
+        return
+    click.echo("\n" + diff.rstrip("\n"))
+    if apply_changes:
+        click.echo(f"\nApplied learned rules to {target}.")
+    else:
+        click.echo("\nPreview only — re-run with --apply to write.")
 
 
 @main.command()

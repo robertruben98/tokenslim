@@ -65,6 +65,7 @@ from .images import (
     reduce_image_tokens,
 )
 from .integrations import TokenSlimLiteLLMCallback, with_tokenslim
+from .learn import Finding, analyze_sessions, apply_rules, propose_rules
 from .memory import ProjectMemoryStore
 from .predict import (
     OutputPrediction,
@@ -160,6 +161,11 @@ __all__ = [
     "predict_output_tokens",
     "extract_output_features",
     "suggest_max_tokens",
+    # Learn (failure mining -> agent rules)
+    "Finding",
+    "analyze_sessions",
+    "propose_rules",
+    "apply_rules",
     # Audit (baseline vs optimized replay)
     "AuditReport",
     "AuditRow",
