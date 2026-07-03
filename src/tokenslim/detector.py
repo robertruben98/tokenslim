@@ -18,6 +18,7 @@ __all__ = ["ContentType", "DetectionResult", "detect_content_type"]
 
 class ContentType(str, Enum):
     JSON = "json"
+    HTML = "html"
     CODE = "code"
     LOG = "log"
     DIFF = "diff"
@@ -49,6 +50,60 @@ _CODE_KEYWORD_RE = re.compile(
 _CODE_SYMBOL_RE = re.compile(r"[{};]|=>|->|::|==|!=|\+=")
 _SEARCH_HIT_RE = re.compile(r"^\s*\d+[:\-]", re.MULTILINE)  # grep/ripgrep "line:..."
 _URL_RE = re.compile(r"https?://\S+")
+# HTML: a doctype/<html> prologue, or several distinct well-known tags up front.
+_HTML_DOC_RE = re.compile(r"<!doctype\s+html\b|<html[\s>]", re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"</?([a-zA-Z][a-zA-Z0-9]*)\b")
+_HTML_TAGS = frozenset(
+    {
+        "html",
+        "head",
+        "body",
+        "title",
+        "meta",
+        "link",
+        "script",
+        "style",
+        "div",
+        "span",
+        "p",
+        "a",
+        "ul",
+        "ol",
+        "li",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "td",
+        "th",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "br",
+        "hr",
+        "img",
+        "nav",
+        "header",
+        "footer",
+        "section",
+        "article",
+        "aside",
+        "main",
+        "form",
+        "input",
+        "button",
+        "strong",
+        "em",
+        "b",
+        "i",
+        "pre",
+        "code",
+        "blockquote",
+    }
+)
 
 
 def _looks_like_json(text: str) -> bool:
@@ -70,6 +125,16 @@ def detect_content_type(text: str) -> DetectionResult:
     # JSON is structurally verifiable, so trust it most.
     if _looks_like_json(text):
         return DetectionResult(ContentType.JSON, 0.99)
+
+    # HTML is likewise structurally checkable: a doctype/<html> prologue, or a
+    # markup-shaped start with several distinct well-known tags near the top.
+    stripped = text.lstrip()
+    if stripped.startswith("<"):
+        if _HTML_DOC_RE.match(stripped):
+            return DetectionResult(ContentType.HTML, 0.97)
+        head_tags = {m.group(1).lower() for m in _HTML_TAG_RE.finditer(stripped[:2048])}
+        if len(head_tags & _HTML_TAGS) >= 3:
+            return DetectionResult(ContentType.HTML, 0.85)
 
     if _DIFF_RE.search(text):
         return DetectionResult(ContentType.DIFF, 0.95)

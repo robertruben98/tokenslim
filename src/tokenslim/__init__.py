@@ -24,6 +24,7 @@ from .ccr import (
 from .compress import BlockStat, CompressionStats, compress
 from .compressors import (
     DiffCompressor,
+    HtmlExtractor,
     JsonMinifier,
     LogCompressor,
     SearchCompressor,
@@ -69,6 +70,7 @@ __all__ = [
     "SearchCompressor",
     "DiffCompressor",
     "JsonMinifier",
+    "HtmlExtractor",
     "compute_optimal_k",
     "BM25Scorer",
     "Scorer",
