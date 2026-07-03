@@ -63,3 +63,30 @@ def test_detect_plain_text():
 def test_empty_is_text():
     assert detect_content_type("").content_type is ContentType.TEXT
     assert detect_content_type("   \n  ").content_type is ContentType.TEXT
+
+
+def test_detect_html_doctype():
+    page = "<!DOCTYPE html><html><head><title>x</title></head><body><p>hi</p></body></html>"
+    r = detect_content_type(page)
+    assert r.content_type is ContentType.HTML
+    assert r.confidence > 0.9
+
+
+def test_detect_html_tag_prologue():
+    page = '<html lang="en">\n<body><p>hello</p></body>\n</html>'
+    assert detect_content_type(page).content_type is ContentType.HTML
+
+
+def test_detect_html_structural_fragment():
+    frag = '<div class="a"><p>Hello <span>world</span></p><ul><li>x</li><li>y</li></ul></div>'
+    assert detect_content_type(frag).content_type is ContentType.HTML
+
+
+def test_single_tag_is_not_html():
+    r = detect_content_type("<p>just one tag around plain prose</p>")
+    assert r.content_type is not ContentType.HTML
+
+
+def test_prose_mentioning_tags_is_not_html():
+    text = "Use div and span tags; e.g. an <html> page has a body and a head section."
+    assert detect_content_type(text).content_type is ContentType.TEXT
