@@ -337,3 +337,20 @@ def test_read_sessions_feeds_analyze(tmp_path):
     findings = analyze_sessions(read_sessions(str(sessions)))
     kinds = sorted(f.kind for f in findings)
     assert kinds == ["inefficient-compression", "repeated-tool-failure"]
+
+
+def test_apply_rules_preserves_crlf_line_endings(tmp_path):
+    """A CRLF target must keep its bytes outside the managed section (#42 review)."""
+    target = tmp_path / "CLAUDE.md"
+    target.write_bytes(b"# proyecto\r\nuser line\r\n")
+    block = f"{RULES_HEADING}\n- Prefer rg over grep. (why: faster)"
+
+    apply_rules(block, target, dry_run=False)
+
+    data = target.read_bytes()
+    assert data.startswith(b"# proyecto\r\nuser line\r\n")
+    assert LEARN_START_MARKER.encode() + b"\r\n" in data
+    assert b"- Prefer rg over grep. (why: faster)\r\n" in data
+    # Re-application stays idempotent on CRLF files too.
+    assert apply_rules(block, target, dry_run=False) == ""
+    assert target.read_bytes() == data

@@ -289,10 +289,13 @@ def apply_rules(
     """
     path = os.fspath(target_path)
     try:
-        with open(path, encoding="utf-8") as fh:
+        # newline="" keeps CRLF/LF byte-exact: --apply must never rewrite
+        # line endings outside the managed section.
+        with open(path, encoding="utf-8", newline="") as fh:
             old = fh.read()
     except FileNotFoundError:
         old = ""
+    eol = "\r\n" if "\r\n" in old else "\n"
 
     n_start = old.count(LEARN_START_MARKER)
     n_end = old.count(LEARN_END_MARKER)
@@ -309,20 +312,23 @@ def apply_rules(
     while LEARN_START_MARKER in block or LEARN_END_MARKER in block:
         block = block.replace(LEARN_START_MARKER, "").replace(LEARN_END_MARKER, "")
 
-    section = f"{LEARN_START_MARKER}\n{block.strip()}\n{LEARN_END_MARKER}\n"
+    block = block.strip().replace("\r\n", "\n")
+    if eol != "\n":
+        block = block.replace("\n", eol)
+    section = f"{LEARN_START_MARKER}{eol}{block}{eol}{LEARN_END_MARKER}{eol}"
     pattern = re.compile(
-        re.escape(LEARN_START_MARKER) + r".*?" + re.escape(LEARN_END_MARKER) + r"\n?",
+        re.escape(LEARN_START_MARKER) + r".*?" + re.escape(LEARN_END_MARKER) + r"(?:\r\n|\n)?",
         re.DOTALL,
     )
     if pattern.search(old):
         new = pattern.sub(lambda _m: section, old, count=1)
     else:
-        if not old or old.endswith("\n\n"):
+        if not old or old.endswith(eol * 2):
             separator = ""
         elif old.endswith("\n"):
-            separator = "\n"
+            separator = eol
         else:
-            separator = "\n\n"
+            separator = eol * 2
         new = old + separator + section
 
     if new == old:
@@ -337,6 +343,6 @@ def apply_rules(
         )
     )
     if not dry_run:
-        with open(path, "w", encoding="utf-8") as fh:
+        with open(path, "w", encoding="utf-8", newline="") as fh:
             fh.write(new)
     return diff
