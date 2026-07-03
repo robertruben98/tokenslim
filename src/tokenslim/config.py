@@ -119,6 +119,12 @@ class Config:
     # Max outlier rows (|z| > 2.5 or min/max holders in numeric columns) kept.
     csv_max_outliers: int = 5
 
+    # --- Output reduction ---
+    # Brevity instructions appended to the system message so the model writes
+    # shorter replies: "off" (default), "balanced", or "aggressive". When set,
+    # integration wrappers apply it automatically after compress().
+    output_reduction: str = "off"
+
     def merged(self, **overrides: Any) -> Config:
         """Return a copy with ``overrides`` applied, ignoring ``None`` values."""
         clean = {k: v for k, v in overrides.items() if v is not None}
