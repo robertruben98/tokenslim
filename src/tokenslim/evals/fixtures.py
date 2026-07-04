@@ -47,6 +47,37 @@ def _json_rows_fixture() -> Fixture:
     )
 
 
+def _json_cyclic_fixture() -> Fixture:
+    # #122 regression: a realistic list endpoint whose numeric ``price`` field
+    # cycles through 37 repeated values (10..46). Before the per-column
+    # uniformity guard, every row looked "rare" (each price recurs ~13x, below
+    # the absolute rare cutoff) so the array crushed ~0%. The lone genuine
+    # anomaly — a refunded, out-of-range, error-tagged row — must still survive.
+    rows = [
+        {
+            "id": i,
+            "name": f"item-{i}",
+            "price": 10 + (i % 37),
+            "status": "ok",
+            "desc": "x" * 40,
+        }
+        for i in range(500)
+    ]
+    rows[137] = {
+        "id": 137,
+        "name": "item-137",
+        "price": 99999,
+        "status": "error",
+        "desc": "refund failed: gateway timeout",
+    }
+    return Fixture(
+        name="json-cyclic",
+        content=json.dumps(rows),
+        must_keep=('"status":"error"', "refund failed: gateway timeout"),
+        question="Which row failed and why?",
+    )
+
+
 def _log_fixture() -> Fixture:
     lines = [
         f"2026-01-02 10:00:{i % 60:02d} INFO request {1000 + i} served 200" for i in range(120)
@@ -80,4 +111,4 @@ def _search_fixture() -> Fixture:
 
 def all_fixtures() -> list[Fixture]:
     """Return the bundled fixture suite."""
-    return [_json_rows_fixture(), _log_fixture(), _search_fixture()]
+    return [_json_rows_fixture(), _json_cyclic_fixture(), _log_fixture(), _search_fixture()]

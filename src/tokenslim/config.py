@@ -59,6 +59,11 @@ class Config:
     crush_keep_tail: int = 3
     # Only crush arrays with at least this many items.
     crush_min_items: int = 12
+    # Max rows preserved purely for carrying a rare categorical value (the JSON
+    # analogue of csv_max_outliers). Surplus rare rows fall into the dropped
+    # middle and stay recoverable via CCR. Guards against a medium-cardinality
+    # column pinning an entire array (issue #122).
+    json_max_rare_rows: int = 5
     # Optional hard budget for number of head+tail items to keep.
     max_items_after_crush: int | None = None
     # Maximum JSON nesting depth SmartCrusher walks; deeper subtrees are passed
