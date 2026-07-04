@@ -73,12 +73,14 @@ def default_registry() -> dict[ContentType, tuple[str, Compressor]]:
     """
     return {
         ContentType.JSON: ("json-minify", minify_json),
+        ContentType.JSONL: ("passthrough", passthrough),
         ContentType.HTML: ("passthrough", passthrough),
         ContentType.CODE: ("passthrough", passthrough),
         ContentType.LOG: ("passthrough", passthrough),
         ContentType.DIFF: ("passthrough", passthrough),
         ContentType.SEARCH: ("passthrough", passthrough),
         ContentType.CSV: ("passthrough", passthrough),
+        ContentType.MD_TABLE: ("passthrough", passthrough),
         ContentType.MARKDOWN: ("passthrough", passthrough),
         ContentType.TEXT: ("passthrough", passthrough),
     }
@@ -99,7 +101,9 @@ def build_registry(
         CodeCompressor,
         DiffCompressor,
         HtmlExtractor,
+        JsonlCompressor,
         LogCompressor,
+        MarkdownTableCompressor,
         SearchCompressor,
         SmartCrusher,
         TabularCompressor,
@@ -108,12 +112,17 @@ def build_registry(
 
     registry = default_registry()
     registry[ContentType.JSON] = (SmartCrusher.name, SmartCrusher(config, store))
+    registry[ContentType.JSONL] = (JsonlCompressor.name, JsonlCompressor(config, store))
     registry[ContentType.HTML] = (HtmlExtractor.name, HtmlExtractor(config, store))
     registry[ContentType.LOG] = (LogCompressor.name, LogCompressor(config, store))
     registry[ContentType.SEARCH] = (SearchCompressor.name, SearchCompressor(config, store))
     registry[ContentType.DIFF] = (DiffCompressor.name, DiffCompressor(config, store))
     registry[ContentType.CODE] = (CodeCompressor.name, CodeCompressor(config, store))
     registry[ContentType.CSV] = (TabularCompressor.name, TabularCompressor(config, store))
+    registry[ContentType.MD_TABLE] = (
+        MarkdownTableCompressor.name,
+        MarkdownTableCompressor(config, store),
+    )
     registry[ContentType.MARKDOWN] = (TextCompressor.name, TextCompressor(config, store))
     registry[ContentType.TEXT] = (TextCompressor.name, TextCompressor(config, store))
     return registry

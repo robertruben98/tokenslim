@@ -15,6 +15,7 @@ from .jsonmin import JsonMinifier
 from .logs import LogCompressor
 from .search import SearchCompressor
 from .smartcrusher import SmartCrusher
+from .structured import JsonlCompressor, MarkdownTableCompressor
 from .tabular import TabularCompressor
 from .text import TextCompressor
 
@@ -28,4 +29,6 @@ __all__ = [
     "TextCompressor",
     "TabularCompressor",
     "HtmlExtractor",
+    "JsonlCompressor",
+    "MarkdownTableCompressor",
 ]
