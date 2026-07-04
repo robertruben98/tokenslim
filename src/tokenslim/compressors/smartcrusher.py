@@ -9,10 +9,15 @@ Two safety rails make the elision lossless *where it matters*:
 
 * **Error preservation** — any item whose serialised form contains an error
   keyword is always kept, wherever it sits in the array.
-* **Rare-value preservation** — for low-cardinality "status"-like fields, every
+* **Rare-value preservation** — for low-cardinality "status"-like fields, an
   item carrying a rare value is kept so anomalies (one ``cancelled`` among a
-  thousand ``ok``) survive. There is no early short-circuit when a field has
-  many distinct codes.
+  thousand ``ok``) survive. Rarity is judged *relative to the column's dominant
+  value*, so a genuinely skewed status field flags its long tail while a uniform
+  medium/high-cardinality column (a cyclic numeric field, dozens of codes each
+  repeated a handful of times) flags nothing — otherwise every row would look
+  "rare" and the array would refuse to crush (issue #122). A global cap
+  (``json_max_rare_rows``, the JSON analogue of ``csv_max_outliers``) bounds how
+  many rows rare-value preservation may pin; head/tail cover the rest.
 
 Sub-issues covered: array classifier + per-field analysis (#21), error &
 rare-value preservation (#22), core crusher (#20).
@@ -274,6 +279,19 @@ _ID_HINT = ("id", "uuid", "key", "pk", "_id", "guid")
 _SCORE_HINT = ("score", "rank", "weight", "confidence", "prob", "rating", "distance")
 _STATUS_HINT = ("status", "state", "level", "type", "code", "result", "severity", "kind")
 
+# A categorical value is preserved as "rare" only when its frequency is at most
+# this fraction of the column's *modal* (most common) frequency. In a genuinely
+# skewed status column the dominant "normal" value towers over the anomalous
+# tail, so real outliers clear this bar; in a *uniform* medium/high-cardinality
+# column — e.g. a cyclic numeric field (``price = 10 + i % 37``) where dozens of
+# values each recur a handful of times — no value is dominant, so nothing is
+# flagged and the array still crushes. This is the guard that stops SmartCrusher
+# degenerating to ~0% savings on realistic API arrays (issue #122). It compares
+# frequencies *within* the column, so it is invariant to both the row count and
+# the number of distinct codes (unlike an absolute count or a raw
+# distinct/rows ratio, which drift as the array grows).
+_RARE_DOMINANCE_FRACTION = 0.5
+
 
 def _name_matches(name: str, hints: tuple[str, ...]) -> bool:
     low = name.lower()
@@ -286,8 +304,12 @@ def analyze_fields(
     """Compute per-field stats for an array of objects.
 
     A *status-like* field is a low-cardinality categorical (few distinct values
-    relative to row count); its rare values (frequency below ``rare_threshold``)
-    are flagged so the crusher can preserve them.
+    relative to row count). A value is flagged as *rare* (worth preserving) only
+    when it is BOTH absolutely infrequent (below ``rare_threshold`` of the rows)
+    AND far rarer than the column's dominant value
+    (``_RARE_DOMINANCE_FRACTION``). The second, relative test is what prevents a
+    uniform medium/high-cardinality column from marking every row rare and
+    defeating compression (issue #122).
     """
     stats: dict[str, FieldStats] = {}
     # Union of keys; only fields present on a majority of rows are "columns".
@@ -319,12 +341,21 @@ def analyze_fields(
         if is_status:
             freq = Counter(json.dumps(v, sort_keys=True, default=str) for v in values)
             cutoff = max(1, math.floor(present * rare_threshold))
+            # A value is rare only if it is dwarfed by the column's dominant
+            # (modal) value. In a uniform column no value clears this, so the
+            # rare set stays empty and the array crushes normally (#122).
+            modal_freq = max(freq.values()) if freq else 0
+            dominance_cutoff = modal_freq * _RARE_DOMINANCE_FRACTION
             raw_by_key = {json.dumps(v, sort_keys=True, default=str): v for v in values}
             for key, c in freq.items():
                 raw = raw_by_key[key]
                 # Only scalar (hashable) status values participate in rare-value
                 # preservation; nested structures aren't categoricals.
-                if c <= cutoff and isinstance(raw, (str, int, float, bool, type(None))):
+                if (
+                    c <= cutoff
+                    and c <= dominance_cutoff
+                    and isinstance(raw, (str, int, float, bool, type(None)))
+                ):
                     rare.add(raw)
 
         stats[name] = FieldStats(
@@ -478,24 +509,31 @@ class SmartCrusher:
             if not anchors:
                 anchors = set(query_terms)
 
+        # Rare-value rows are collected, then capped globally (below) so a quirky
+        # column can't pin the whole array. Error rows and query anchors are
+        # unconditional keeps and never consume the rare-value budget.
+        rare_indices: list[int] = []
         for i, item in enumerate(items):
             if i in keep:
                 continue
             if self._is_error_item(item):
                 keep.add(i)
                 continue
-            if field_stats and self._has_rare_value(item, field_stats):
+            if anchors and self._matches_anchor(item, anchors):
                 keep.add(i)
                 continue
-            if anchors:
-                blob = (
-                    item
-                    if isinstance(item, str)
-                    else json.dumps(item, ensure_ascii=False, default=str)
-                ).lower()
-                item_tokens = set(tokenize(blob))
-                if anchors.intersection(item_tokens):
-                    keep.add(i)
+            if field_stats and self._has_rare_value(item, field_stats):
+                rare_indices.append(i)
+
+        # Global cap on rare-value rows — the JSON analogue of
+        # ``csv_max_outliers``. Keep the first ``json_max_rare_rows`` in document
+        # order; any surplus falls into the dropped middle (still recoverable via
+        # CCR) and head/tail cover the gap. Together with the per-column
+        # uniformity guard in ``analyze_fields`` this keeps SmartCrusher from
+        # degenerating to ~0% on realistic arrays (#122).
+        cap = max(0, self.config.json_max_rare_rows)
+        for idx in rare_indices[:cap]:
+            keep.add(idx)
 
         # Anomaly detection (Z-score outliers + variance change points)
         # 1. Raw numbers array
@@ -565,6 +603,13 @@ class SmartCrusher:
                     keep.add(indexed[k_max + 1][0])
 
         return keep
+
+    def _matches_anchor(self, item: Any, anchors: set[str]) -> bool:
+        """True if the item's tokens intersect the query anchor terms."""
+        blob = (
+            item if isinstance(item, str) else json.dumps(item, ensure_ascii=False, default=str)
+        ).lower()
+        return bool(anchors.intersection(tokenize(blob)))
 
     def _is_error_item(self, item: Any) -> bool:
         """True if the item's serialised form contains an error keyword."""

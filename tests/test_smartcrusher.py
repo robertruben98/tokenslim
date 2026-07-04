@@ -185,6 +185,79 @@ def test_query_anchor_preservation():
     assert 50 in ids
 
 
+# --- rare-value degeneration guard (#122) --------------------------------
+
+
+def test_uniform_medium_cardinality_has_no_rare_values():
+    # A cyclic numeric column: 37 distinct prices, each recurring ~8x. None is
+    # "rare" relative to the (equally common) modal value, so the rare set is
+    # empty and the array can still crush (#122).
+    items = [{"price": 10 + i % 37} for i in range(300)]
+    stats = analyze_fields(items)
+    assert stats["price"].is_status_like is True
+    assert stats["price"].rare_values == frozenset()
+
+
+def test_genuine_unique_value_still_rare_in_medium_card():
+    # A single out-of-family value stands out even amid a cyclic column: it is
+    # dwarfed by the modal frequency, so it stays preservable.
+    items = [{"price": 10 + i % 37} for i in range(300)]
+    items.append({"price": -999})
+    stats = analyze_fields(items)
+    assert -999 in stats["price"].rare_values
+    # ...while the uniform bulk is still not rare.
+    assert 10 not in stats["price"].rare_values
+
+
+def test_cyclic_numeric_field_does_not_degenerate():
+    # The #122 reproducer: a homogeneous array with a cyclic numeric field must
+    # crush to head/tail + sentinel instead of keeping every row.
+    data = [
+        {"id": i, "name": f"item-{i}", "price": 10 + i % 37, "status": "ok", "desc": "x" * 40}
+        for i in range(300)
+    ]
+    out = _crush(data)
+    assert any(isinstance(o, dict) and SENTINEL_KEY in o for o in out)
+    # head(5) + tail(3) + 1 sentinel; nothing spurious kept from the middle.
+    assert len(out) == 9
+
+
+def test_out_of_range_number_in_cyclic_column_kept():
+    # A cyclic price column crushes, yet a wildly out-of-range value survives.
+    data = [{"id": i, "price": 10 + i % 37} for i in range(300)]
+    data[150] = {"id": 150, "price": 99999}
+    out = _crush(data)
+    assert any(isinstance(o, dict) and o.get("price") == 99999 for o in out)
+    assert any(isinstance(o, dict) and SENTINEL_KEY in o for o in out)
+
+
+def test_anomalous_null_is_kept():
+    data = [{"id": i, "status": "ok"} for i in range(200)]
+    data[99] = {"id": 99, "status": None}
+    out = _crush(data)
+    kept_ids = [o["id"] for o in out if isinstance(o, dict) and "id" in o]
+    assert 99 in kept_ids
+
+
+def test_rare_value_rows_are_capped():
+    # A skewed status column with many distinct rare codes buried in the middle:
+    # the global cap bounds how many rows rare-value preservation pins.
+    data = [{"id": i, "status": "ok"} for i in range(200)]
+    for j, code in enumerate(["aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh"]):
+        data[20 + j] = {"id": 20 + j, "status": code}
+    config = Config(
+        crush_keep_head=5,
+        crush_keep_tail=3,
+        crush_min_items=12,
+        json_max_rare_rows=3,
+    )
+    out = json.loads(SmartCrusher(config)(json.dumps(data)))
+    rare_kept = [
+        o["status"] for o in out if isinstance(o, dict) and o.get("status") not in (None, "ok")
+    ]
+    assert len(rare_kept) == 3
+
+
 def test_k_split_budget():
     data = [{"id": i} for i in range(100)]
 

@@ -23,6 +23,17 @@ def test_run_suite_actually_compresses():
     assert by_name["sre-log"].ratio > 0.5
 
 
+def test_json_cyclic_regression_does_not_degenerate():
+    # #122: a cyclic numeric column used to crush ~0%; the guard must keep it
+    # well above 70% while its genuine anomaly stays faithful.
+    by_name = {r.name: r for r in run_suite()}
+    cyclic = by_name["json-cyclic"]
+    assert cyclic.ratio >= 0.7
+    assert cyclic.faithful
+    # No regression on the monotone JSON fixture.
+    assert by_name["json-orders"].ratio > 0.9
+
+
 def test_must_keep_survives_in_visible_output():
     # The faithfulness guarantee the milestone cares about: answer-bearing
     # content (the error row) is present in the *visible* compressed output.
