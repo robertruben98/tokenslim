@@ -49,7 +49,7 @@ All TokenSlim settings are plain `TOKENSLIM_*` environment variables
 | `TOKENSLIM_PROXY_PORT` | `8787` | Port the proxy listens on inside the container. |
 | `TOKENSLIM_TARGET_RATIO` | `0.2` | Target compression ratio. |
 | `TOKENSLIM_ENABLED` | `true` | Set `false` to pass everything through uncompressed. |
-| `TOKENSLIM_TELEMETRY` | on | Set `off` to disable anonymous telemetry. |
+| `TOKENSLIM_TELEMETRY` | off | Telemetry is opt-in; set `on`/`1`/`yes` to enable it, or `off` to force it off where some code opts in. Config always wins. |
 
 Run `tokenslim doctor` for the full list:
 
