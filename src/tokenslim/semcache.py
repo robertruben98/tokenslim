@@ -172,9 +172,7 @@ def _words(text: str) -> set[str]:
 
 def _strip_accents(text: str) -> str:
     """Drop combining marks so "café"/"añadir" compare as "cafe"/"anadir"."""
-    return "".join(
-        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
-    )
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
 
 
 def _guard_words(text: str) -> set[str]:
