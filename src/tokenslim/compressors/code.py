@@ -2,6 +2,13 @@
 
 Preserves imports, signatures, types, and the first line of docstrings/JSDoc;
 elides function and method bodies and caches them in the CCR store if enabled.
+
+Performance (issue #121): the tree-sitter tree is built exactly ONCE per block
+and reused across every pass (language detection, signatures, docstrings,
+bodies) instead of re-parsing the buffer up to five times. Blocks larger than
+``config.code_ast_max_bytes`` skip the AST path entirely and fall back to the
+text compressor, so a pathological payload can never turn into a super-linear
+parse / error-recovery.
 """
 
 from __future__ import annotations
@@ -28,52 +35,75 @@ except ImportError:
 
 __all__ = ["CodeCompressor", "detect_language"]
 
+# Node types whose bodies we elide, keyed by language.
+_PY_FUNC_TYPES = frozenset({"function_definition"})
+_JS_FUNC_TYPES = frozenset(
+    {
+        "function_declaration",
+        "function_expression",
+        "method_definition",
+        "arrow_function",
+        "generator_function",
+    }
+)
+# The body node holding the statements to elide, per language.
+_BODY_TYPE = {"python": "block", "javascript": "statement_block"}
 
-def detect_language(text: str) -> str | None:
-    """Detect if the code is Python or JavaScript/TypeScript using tree-sitter."""
+_PY_HINT_RE = re.compile(r"\b(def|elif|import|from)\b")
+_JS_HINT_RE = re.compile(r"\b(function|const|let|console|export)\b")
+
+
+def _language(flavor: str) -> Any:
+    """Return the tree-sitter ``Language`` for ``flavor``."""
+    if flavor == "python":
+        return Language(tspython.language())
+    return Language(tsjavascript.language())
+
+
+def _parse(text_bytes: bytes, flavor: str) -> Any:
+    """Parse ``text_bytes`` with ``flavor``'s grammar and return the tree.
+
+    This is the single tree-sitter parse choke point for the whole module: every
+    parse goes through here, so a spy can assert the tree is built exactly once
+    per block (issue #121).
+    """
+    parser = Parser(_language(flavor))
+    return parser.parse(text_bytes)
+
+
+def _detect_and_parse(text_bytes: bytes) -> tuple[str, Any] | None:
+    """Detect the language *and* return its parse tree, parsing at most twice.
+
+    Keyword hints pick the most likely grammar first so a well-formed block
+    parses exactly once; the resulting tree is returned for reuse across every
+    later pass. A second parse only happens when the first grammar reports
+    errors (i.e. the hint was wrong). Returns ``None`` when tree-sitter is
+    unavailable, so the compressor degrades to a safe no-op.
+    """
     if not HAS_TREE_SITTER:
         return None
 
-    text_bytes = text.encode("utf-8")
+    text = text_bytes.decode("utf-8", errors="replace")
+    py_hints = len(_PY_HINT_RE.findall(text))
+    js_hints = len(_JS_HINT_RE.findall(text))
+    order = ("python", "javascript") if py_hints >= js_hints else ("javascript", "python")
 
-    # Quick keyword check to prioritize
-    py_hints = len(re.findall(r"\b(def|elif|import|from)\b", text))
-    js_hints = len(re.findall(r"\b(function|const|let|console|export)\b", text))
+    first: tuple[str, Any] | None = None
+    for flavor in order:
+        tree = _parse(text_bytes, flavor)
+        if first is None:
+            first = (flavor, tree)
+        if not tree.root_node.has_error:
+            return flavor, tree
+    # Neither grammar parsed cleanly: keep the best-guess (first) tree so we can
+    # still elide what we can, without a third parse.
+    return first
 
-    py_lang = Language(tspython.language())
-    js_lang = Language(tsjavascript.language())
 
-    py_parser = Parser(py_lang)
-    js_parser = Parser(js_lang)
-
-    if py_hints >= js_hints:
-        py_tree = py_parser.parse(text_bytes)
-        if not py_tree.root_node.has_error:
-            return "python"
-        js_tree = js_parser.parse(text_bytes)
-        if not js_tree.root_node.has_error:
-            return "javascript"
-    else:
-        js_tree = js_parser.parse(text_bytes)
-        if not js_tree.root_node.has_error:
-            return "javascript"
-        py_tree = py_parser.parse(text_bytes)
-        if not py_tree.root_node.has_error:
-            return "python"
-
-    # Fallback: choose the one with fewer errors
-    def count_errors(node) -> int:
-        count = 1 if node.type == "ERROR" or node.is_error else 0
-        for child in node.children:
-            count += count_errors(child)
-        return count
-
-    py_tree = py_parser.parse(text_bytes)
-    js_tree = js_parser.parse(text_bytes)
-    py_errors = count_errors(py_tree.root_node)
-    js_errors = count_errors(js_tree.root_node)
-
-    return "python" if py_errors <= js_errors else "javascript"
+def detect_language(text: str) -> str | None:
+    """Detect if the code is Python or JavaScript/TypeScript using tree-sitter."""
+    detected = _detect_and_parse(text.encode("utf-8"))
+    return None if detected is None else detected[0]
 
 
 class CodeCompressor:
@@ -89,66 +119,76 @@ class CodeCompressor:
         self.config = config or Config()
         self.store = store
 
+    def _text_fallback(self, text: str, content_type: ContentType) -> str:
+        """Compress ``text`` with the cheap text compressor (AST path skipped)."""
+        from .text import TextCompressor
+
+        return TextCompressor(self.config, self.store)(text, content_type)
+
     def __call__(self, text: str, content_type: ContentType = ContentType.CODE) -> str:
         if not HAS_TREE_SITTER:
             return text
 
-        flavor = detect_language(text)
-        if not flavor:
-            return text
-
         text_bytes = text.encode("utf-8")
-        if flavor == "python":
-            lang = Language(tspython.language())
-        else:
-            lang = Language(tsjavascript.language())
 
-        parser = Parser(lang)
-        tree = parser.parse(text_bytes)
+        # Size cap for the AST path: on a very large (or malformed) block the
+        # tree-sitter parse and its error recovery dominate, so hand oversized
+        # inputs to the linear text compressor instead (issue #121). A cap of 0
+        # (or less) disables the guard.
+        cap = self.config.code_ast_max_bytes
+        if cap and cap > 0 and len(text_bytes) > cap:
+            return self._text_fallback(text, content_type)
 
-        # Collect function/method bodies to elide
-        blocks: list[tuple[Any, str]] = []
+        detected = _detect_and_parse(text_bytes)
+        if detected is None:
+            return text
+        flavor, tree = detected
 
-        def traverse(node: Any) -> None:
-            if flavor == "python":
-                if node.type == "function_definition":
-                    for child in node.children:
-                        if child.type == "block":
-                            blocks.append((child, "python"))
-                            return
-                for child in node.children:
-                    traverse(child)
-            else:
-                if node.type in (
-                    "function_declaration",
-                    "function_expression",
-                    "method_definition",
-                    "arrow_function",
-                    "generator_function",
-                ):
-                    for child in node.children:
-                        if child.type == "statement_block":
-                            blocks.append((child, "javascript"))
-                            return
-                for child in node.children:
-                    traverse(child)
-
-        traverse(tree.root_node)
-
+        # Single tree, reused for every pass below.
+        blocks = self._collect_blocks(tree, flavor)
         if not blocks:
             return text
 
-        # Sort blocks by start byte to apply replacements sequentially
-        blocks.sort(key=lambda x: x[0].start_byte)
+        return self._elide(text_bytes, blocks, flavor)
 
+    def _collect_blocks(self, tree: Any, flavor: str) -> list[Any]:
+        """Return function/method body nodes to elide, in source order.
+
+        Linear iterative walk (no per-node re-scan of the buffer, no recursion):
+        once a function body is found we do not descend into it, since the whole
+        body is elided anyway.
+        """
+        func_types = _PY_FUNC_TYPES if flavor == "python" else _JS_FUNC_TYPES
+        body_type = _BODY_TYPE[flavor]
+
+        blocks: list[Any] = []
+        stack: list[Any] = [tree.root_node]
+        while stack:
+            node = stack.pop()
+            if node.type in func_types:
+                body = next((c for c in node.children if c.type == body_type), None)
+                if body is not None:
+                    blocks.append(body)
+                    continue  # do not descend into the elided body
+            stack.extend(node.children)
+
+        blocks.sort(key=lambda b: b.start_byte)
+        return blocks
+
+    def _elide(self, text_bytes: bytes, blocks: list[Any], flavor: str) -> str:
+        """Rebuild the source with each body replaced by a compact CCR marker.
+
+        Walks the (sorted) body offsets once, copying the spans between them —
+        the whole rebuild is linear in the input size.
+        """
         chunks: list[bytes] = []
         last_idx = 0
 
-        for block, flav in blocks:
-            # Code before the block
+        for block in blocks:
+            # Code before the block.
             chunks.append(text_bytes[last_idx : block.start_byte])
 
-            if flav == "python":
+            if flavor == "python":
                 docstring_line = None
                 if block.child_count > 0:
                     first_child = block.children[0]
@@ -183,7 +223,7 @@ class CodeCompressor:
                 chunks.append(replacement.encode("utf-8"))
                 last_idx = block.end_byte
 
-            elif flav == "javascript":
+            elif flavor == "javascript":
                 # Keep braces and elide the inside
                 if (
                     block.child_count >= 2

@@ -108,6 +108,13 @@ class Config:
     # Trim each kept hunk's leading/trailing context lines to this many.
     diff_context: int = 2
 
+    # --- CodeCompressor (tree-sitter AST path) ---
+    # Blocks larger than this many UTF-8 bytes skip the tree-sitter AST path and
+    # fall back to the linear text compressor. Guards against super-linear parse
+    # and error recovery on huge or malformed payloads (issue #121). Default
+    # 256 KiB; set to 0 to disable the cap.
+    code_ast_max_bytes: int = 256 * 1024
+
     # --- HtmlExtractor ---
     # Keep hyperlink targets as "text (url)" instead of dropping the URL.
     html_keep_links: bool = False

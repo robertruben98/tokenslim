@@ -199,13 +199,19 @@ def detect_content_type(text: str) -> DetectionResult:
     if n_lines >= 3 and search_hits / n_lines >= 0.5:
         return DetectionResult(ContentType.SEARCH, min(0.9, 0.55 + search_hits / n_lines))
 
-    code_score = len(_CODE_KEYWORD_RE.findall(text)) + 0.5 * len(_CODE_SYMBOL_RE.findall(text))
+    keyword_hits = len(_CODE_KEYWORD_RE.findall(text))
+    symbol_hits = len(_CODE_SYMBOL_RE.findall(text))
+    code_score = keyword_hits + 0.5 * symbol_hits
     md_hits = len(_MARKDOWN_RE.findall(text))
 
-    # Prose with URLs / sentences shouldn't be misread as code; require a
-    # reasonable density of code signals relative to size.
+    # Prose shouldn't be misread as code. A single physical line can carry a few
+    # English words that happen to be code keywords ("please import ... from ...
+    # and return it"), so keyword density alone is not enough: real code either
+    # spans multiple lines or carries structural punctuation ({} ; => -> :: == …).
+    # Require a reasonable signal density AND one of those structural cues.
     code_density = code_score / max(1, n_lines)
-    if code_score >= 3 and code_density >= 0.8 and code_score >= md_hits:
+    has_structure = n_lines >= 2 or symbol_hits >= 2
+    if code_score >= 3 and code_density >= 0.8 and code_score >= md_hits and has_structure:
         return DetectionResult(ContentType.CODE, min(0.9, 0.5 + code_density / 4))
 
     if md_hits >= 2:

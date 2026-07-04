@@ -139,3 +139,24 @@ def test_single_tag_is_not_html():
 def test_prose_mentioning_tags_is_not_html():
     text = "Use div and span tags; e.g. an <html> page has a body and a head section."
     assert detect_content_type(text).content_type is ContentType.TEXT
+
+
+def test_single_line_sentence_is_not_code():
+    # Acceptance string from issue #121: one line of prose must never be code.
+    r = detect_content_type("Hello, this is a sentence.")
+    assert r.content_type is not ContentType.CODE
+    assert r.content_type is ContentType.TEXT
+
+
+def test_single_line_prose_with_code_keywords_is_not_code():
+    # Prose that merely contains words like import/from/return read as English,
+    # not code — a single line with no structural punctuation isn't code (#121).
+    text = "Please import the report from the shared drive and return it to me."
+    assert detect_content_type(text).content_type is not ContentType.CODE
+    assert detect_content_type(text).content_type is ContentType.TEXT
+
+
+def test_single_line_code_with_symbols_still_code():
+    # A single line with real structural punctuation is still code.
+    text = 'const config = require("x"); let y = 2;'
+    assert detect_content_type(text).content_type is ContentType.CODE
