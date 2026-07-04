@@ -83,8 +83,11 @@ Head to the [Quickstart](quickstart.md) next.
 
 ## Design principles
 
-- **Local-first** — no network calls in the compression path; the optional
-  telemetry ping is anonymous and disabled with `TOKENSLIM_TELEMETRY=off`.
+- **Local-first** — no network calls in the compression path by default.
+  Telemetry is **opt-in**: nothing is sent unless you pass
+  `Config(telemetry=True)`. Config wins — `TOKENSLIM_TELEMETRY=off` can
+  additionally disable an opt-in, but the env var can never turn telemetry on
+  against `Config(telemetry=False)`. See [Telemetry &amp; privacy](#telemetry-privacy).
 - **Never break a request** — compressors return the original text on parse
   failure or when the output would not be smaller; integration wrappers and the
   proxy swallow their own errors.
@@ -92,3 +95,21 @@ Head to the [Quickstart](quickstart.md) next.
 - **Zero heavy deps** — tokenizers, tree-sitter, Pillow, and
   sentence-transformers are all optional extras; every integration is
   duck-typed and never imports the framework SDK.
+
+## Telemetry &amp; privacy
+
+Telemetry is **off by default** (`Config.telemetry` defaults to `False`) and
+opt-in. When enabled it sends an anonymous, payload-free event (token counts,
+compression ratio, version, model name, content types) on a single background
+worker — never blocking compression. **Config always wins**; the environment
+variable can only *additionally* disable it:
+
+| `Config.telemetry` | `TOKENSLIM_TELEMETRY`      | Sends? |
+| ------------------ | ------------------------- | ------ |
+| `False` (default)  | anything / unset          | no     |
+| `True`             | unset / `on` / `1` / `yes`| yes    |
+| `True`             | `off` / `false` / `0` / `no` | no  |
+
+You never need `TOKENSLIM_TELEMETRY=off` to stay private — that is already the
+default. The env var exists to force telemetry off in an environment where some
+code opts in with `Config(telemetry=True)`.

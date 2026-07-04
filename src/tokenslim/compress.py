@@ -173,6 +173,7 @@ def compress(
         new_tokens=stats.new_tokens,
         model=config.model,
         content_types=content_types,
+        enabled=config.telemetry,
     )
 
     # Opt-in local session capture (see tokenslim.capture, issue #41).
