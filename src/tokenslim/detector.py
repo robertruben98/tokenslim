@@ -19,12 +19,14 @@ __all__ = ["ContentType", "DetectionResult", "detect_content_type"]
 
 class ContentType(str, Enum):
     JSON = "json"
+    JSONL = "jsonl"
     HTML = "html"
     CODE = "code"
     LOG = "log"
     DIFF = "diff"
     SEARCH = "search"
     CSV = "csv"
+    MD_TABLE = "markdown_table"
     MARKDOWN = "markdown"
     TEXT = "text"
 
@@ -161,6 +163,45 @@ def _looks_like_json(text: str) -> bool:
     return True
 
 
+def _looks_like_jsonl(lines: list[str]) -> bool:
+    """True for newline-delimited JSON: >=2 lines each an object/array literal.
+
+    Requires every sampled non-blank line to start with ``{``/``[`` and parse as
+    standalone JSON. Pretty-printed single documents fail (their lines don't
+    parse alone) and are already caught by the whole-document JSON check, and
+    logs/prose never start every line with a brace.
+    """
+    payload = [ln for ln in lines if ln.strip()]
+    if len(payload) < 2:
+        return False
+    sample = payload if len(payload) <= 20 else payload[:10] + payload[-10:]
+    for ln in sample:
+        s = ln.strip()
+        if s[0] not in "{[":
+            return False
+        try:
+            json.loads(s)
+        except (ValueError, TypeError):
+            return False
+    return True
+
+
+# A markdown table separator row: ``|---|:--:|`` (>= 2 dashed columns).
+_MD_TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(?:\|\s*:?-{2,}:?\s*)+\|?\s*$")
+
+
+def _looks_like_md_table(lines: list[str]) -> bool:
+    """True when a header row is immediately followed by a ``|---|`` separator."""
+    for i in range(1, len(lines)):
+        if (
+            _MD_TABLE_SEP_RE.match(lines[i])
+            and "|" in lines[i - 1]
+            and any("|" in ln and ln.strip() for ln in lines[i + 1 : i + 3])
+        ):
+            return True
+    return False
+
+
 def detect_content_type(text: str) -> DetectionResult:
     """Classify ``text`` and return the type with a confidence in [0, 1]."""
     if not text or not text.strip():
@@ -186,9 +227,21 @@ def detect_content_type(text: str) -> DetectionResult:
     lines = text.splitlines() or [text]
     n_lines = len(lines)
 
+    # JSONL (newline-delimited JSON) — structurally verifiable, so trust it high
+    # and before the code branch (brace-heavy lines otherwise read as code).
+    if _looks_like_jsonl(lines):
+        return DetectionResult(ContentType.JSONL, 0.97)
+
     log_hits = len(_LOG_LINE_RE.findall(text))
     if n_lines >= 2 and log_hits / n_lines >= 0.4:
         return DetectionResult(ContentType.LOG, min(0.95, 0.6 + log_hits / n_lines))
+
+    # Markdown pipe tables (header + ``|---|`` separator). Checked before the CSV
+    # and generic-markdown branches: pipe rows are delimiter-terminated so
+    # _looks_like_csv rejects them, and a table is a stronger signal than the
+    # loose markdown heuristic below.
+    if _looks_like_md_table(lines):
+        return DetectionResult(ContentType.MD_TABLE, 0.9)
 
     # Tabular data must be checked BEFORE the search branch: CSV rows with
     # date-like leading fields ("12-05", "10:30") also match _SEARCH_HIT_RE.

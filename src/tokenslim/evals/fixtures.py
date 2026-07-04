@@ -109,6 +109,47 @@ def _search_fixture() -> Fixture:
     )
 
 
+def _jsonl_fixture() -> Fixture:
+    # A newline-delimited event stream: 300 heartbeats plus one error line —
+    # the answer-bearing record SmartCrusher must keep (via error-keyword rule).
+    lines = [
+        json.dumps({"id": i, "level": "info", "msg": "heartbeat", "shard": i % 8})
+        for i in range(300)
+    ]
+    lines[137] = json.dumps(
+        {"id": 137, "level": "error", "msg": "disk full on shard-3", "shard": 3}
+    )
+    return Fixture(
+        name="jsonl-events",
+        content="\n".join(lines),
+        must_keep=("disk full on shard-3", '"level":"error"'),
+        question="Which event failed and why?",
+    )
+
+
+def _md_table_fixture() -> Fixture:
+    # A 200-row markdown pipe table; the notable row sits in the kept tail so a
+    # reader can still answer over it after compaction.
+    rows = ["| id | endpoint | status | ms |", "| --- | --- | --- | --- |"]
+    for i in range(198):
+        rows.append(f"| {i} | /api/item/{i} | 200 | {12 + i % 9} |")
+    rows.append("| 198 | /api/checkout | 503 | 8100 |")
+    rows.append("| 199 | /api/health | 200 | 4 |")
+    return Fixture(
+        name="md-table",
+        content="\n".join(rows),
+        must_keep=("/api/checkout", "503"),
+        question="Which endpoint returned a 503?",
+    )
+
+
 def all_fixtures() -> list[Fixture]:
     """Return the bundled fixture suite."""
-    return [_json_rows_fixture(), _json_cyclic_fixture(), _log_fixture(), _search_fixture()]
+    return [
+        _json_rows_fixture(),
+        _json_cyclic_fixture(),
+        _jsonl_fixture(),
+        _md_table_fixture(),
+        _log_fixture(),
+        _search_fixture(),
+    ]
