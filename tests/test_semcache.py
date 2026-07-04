@@ -235,6 +235,88 @@ def test_lexical_guard_direct():
     assert ("con", "sin") in ANTONYM_PAIRS
 
 
+# --- Spanish antonyms / negations (issue #125): must MISS despite high cosine ---
+
+
+def test_guard_rejects_the_known_admin_false_positive():
+    """The documented false positive: sim ~= 0.969 >= 0.96 but opposite action."""
+    cache, _ = _cache(
+        {
+            "crea el usuario admin": _vec(1.0),
+            "borra el usuario admin": _vec(0.969),
+        }
+    )
+    cache.put("crea el usuario admin", "Usuario admin creado.")
+    assert cache.get("borra el usuario admin") is None
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("crea el usuario admin", "borra el usuario admin"),
+        ("crea el usuario admin", "elimina el usuario admin"),
+        ("activa el firewall", "desactiva el firewall"),
+        ("conecta el servidor", "desconecta el servidor"),
+        ("instala el paquete", "desinstala el paquete"),
+        ("enciende la luz", "apaga la luz"),
+        ("sube el volumen", "baja el volumen"),
+        ("abre el archivo", "cierra el archivo"),
+        ("añade un usuario", "quita un usuario"),
+        ("inicia el proceso", "detén el proceso"),
+        ("arranca el servicio", "para el servicio"),
+        ("permite el acceso", "deniega el acceso"),
+        ("permite el acceso", "prohíbe el acceso"),
+        ("muestra el panel", "oculta el panel"),
+    ],
+)
+def test_guard_rejects_spanish_antonym_flips(a, b):
+    assert not _lexical_guard(a, b), f"{a!r} vs {b!r} must be rejected (MISS)"
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        ("no reinicies el servidor", "reinicia el servidor"),
+        ("nunca borres la base de datos", "borra la base de datos"),
+        ("configura el proxy sin caché", "configura el proxy con caché"),
+    ],
+)
+def test_guard_rejects_spanish_negation_flips(a, b):
+    assert not _lexical_guard(a, b), f"negation flip {a!r} vs {b!r} must MISS"
+
+
+def test_guard_rejects_english_contraction_negation():
+    """don't -> normalized to 'not', so the negation flip is detected."""
+    assert not _lexical_guard("don't restart the server", "restart the server")
+    assert not _lexical_guard("can't reach the host", "reach the host")
+
+
+@pytest.mark.parametrize(
+    ("a", "b"),
+    [
+        # Same verb, different phrasing / accents / politeness -> legitimate HIT.
+        ("crea el usuario admin", "crea al usuario admin"),
+        ("cómo reinicio el servidor", "cómo puedo reiniciar el servidor"),
+        ("muéstrame el reporte", "muestra el reporte"),
+        ("activa el modo oscuro", "activa el modo oscuro por favor"),
+        ("sube el archivo al servidor", "sube el fichero al servidor"),
+        ("café con leche", "cafe con leche"),
+    ],
+)
+def test_guard_allows_spanish_paraphrases(a, b):
+    assert _lexical_guard(a, b), f"legit paraphrase {a!r} vs {b!r} must stay a HIT"
+
+
+def test_admin_false_positive_served_when_guard_disabled():
+    """With guard=False the raw cosine hit is served (documents the risk)."""
+    cache, _ = _cache(
+        {"crea el usuario admin": _vec(1.0), "borra el usuario admin": _vec(0.969)},
+        guard=False,
+    )
+    cache.put("crea el usuario admin", "Usuario admin creado.")
+    assert cache.get("borra el usuario admin") is not None
+
+
 # --- Never-raise behaviour ---
 
 
