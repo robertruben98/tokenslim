@@ -150,7 +150,9 @@ class ContentRouter:
         ctype = detection.content_type
 
         # Skip payloads below the byte threshold — not worth the overhead.
-        if len(text.encode("utf-8")) < self.config.min_bytes:
+        # ``surrogatepass`` so lone UTF-16 surrogates in the input can't raise
+        # UnicodeEncodeError here (issue #116).
+        if len(text.encode("utf-8", "surrogatepass")) < self.config.min_bytes:
             return RouteResult(text, ctype, detection.confidence, "skip", False, True)
 
         entry = self.registry.get(ctype)

@@ -27,6 +27,11 @@ class Config:
 
     # Payloads smaller than this many bytes are passed through untouched.
     min_bytes: int = 200
+    # A compressed block is kept only when it saves MORE than this many tokens
+    # net (CCR marker cost included). Otherwise the block is reverted to its
+    # original, so compression can never inflate a block (issue #117: a marker
+    # can shrink characters while growing tokens).
+    min_token_savings: int = 0
     # Model name used for token counting (selects the tokenizer backend).
     model: str | None = None
     # Master switch — when False, compress() is a no-op passthrough.
@@ -56,6 +61,9 @@ class Config:
     crush_min_items: int = 12
     # Optional hard budget for number of head+tail items to keep.
     max_items_after_crush: int | None = None
+    # Maximum JSON nesting depth SmartCrusher walks; deeper subtrees are passed
+    # through untouched so pathological nesting can't blow the stack (issue #116).
+    max_json_depth: int = 200
     # Substrings (case-insensitive) that mark an item as must-keep.
     error_keywords: tuple[str, ...] = (
         "error",

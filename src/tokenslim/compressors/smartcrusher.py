@@ -357,7 +357,7 @@ class SmartCrusher:
         except (ValueError, TypeError):
             return text
 
-        crushed = self._crush_value(data)
+        crushed = self._crush_value(data, 0)
         if crushed is _UNCHANGED:
             # Nothing crushed; still strip whitespace for the cheap win.
             return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
@@ -365,15 +365,22 @@ class SmartCrusher:
 
     # -- recursion -------------------------------------------------------
 
-    def _crush_value(self, value: Any) -> Any:
-        """Return a crushed copy, or the ``_UNCHANGED`` sentinel if no change."""
+    def _crush_value(self, value: Any, depth: int) -> Any:
+        """Return a crushed copy, or the ``_UNCHANGED`` sentinel if no change.
+
+        ``depth`` is the current JSON nesting level; beyond
+        ``config.max_json_depth`` the subtree is passed through untouched so
+        pathological nesting can't exhaust the stack (issue #116).
+        """
+        if depth > self.config.max_json_depth:
+            return _UNCHANGED
         if isinstance(value, list):
-            return self._crush_array(value)
+            return self._crush_array(value, depth)
         if isinstance(value, dict):
             changed = False
             out = {}
             for k, v in value.items():
-                cv = self._crush_value(v)
+                cv = self._crush_value(v, depth + 1)
                 if cv is _UNCHANGED:
                     out[k] = v
                 else:
@@ -397,28 +404,28 @@ class SmartCrusher:
         tail = k - head
         return head, tail
 
-    def _crush_array(self, items: list[Any]) -> Any:
+    def _crush_array(self, items: list[Any], depth: int) -> Any:
         n = len(items)
         if self.config.max_items_after_crush is not None:
             k = min(self.config.max_items_after_crush, n)
             head, tail = self._split_budget(k)
             if n <= k:
-                return self._maybe_recurse_children(items)
+                return self._maybe_recurse_children(items, depth)
         else:
             head = self.config.crush_keep_head
             tail = self.config.crush_keep_tail
             if n < self.config.crush_min_items or n <= head + tail + 1:
-                return self._maybe_recurse_children(items)
+                return self._maybe_recurse_children(items, depth)
 
         kind = classify_array(items)
         if kind in (ArrayKind.MIXED, ArrayKind.EMPTY):
-            return self._maybe_recurse_children(items)
+            return self._maybe_recurse_children(items, depth)
 
         field_stats = analyze_fields(items) if kind is ArrayKind.OBJECTS else {}
 
         keep_indices = self._select_keep_indices(items, field_stats, head, tail)
         if len(keep_indices) >= n:
-            return self._maybe_recurse_children(items)
+            return self._maybe_recurse_children(items, depth)
 
         dropped = [items[i] for i in range(n) if i not in keep_indices]
         result: list[Any] = []
@@ -439,11 +446,11 @@ class SmartCrusher:
                 sentinel_emitted = True
         return result
 
-    def _maybe_recurse_children(self, items: list[Any]) -> Any:
+    def _maybe_recurse_children(self, items: list[Any], depth: int) -> Any:
         changed = False
         out = []
         for item in items:
-            cv = self._crush_value(item)
+            cv = self._crush_value(item, depth + 1)
             if cv is _UNCHANGED:
                 out.append(item)
             else:

@@ -145,6 +145,8 @@ Global knobs that shape all compressors:
 | --- | --- | --- |
 | `enabled` | `true` | Master switch — `false` makes `compress()` a passthrough |
 | `min_bytes` | `200` | Skip blocks smaller than this many UTF-8 bytes |
+| `min_token_savings` | `0` | Keep a compressed block only if it saves more than this many tokens net (marker cost included); else revert — compression never inflates |
+| `max_json_depth` | `200` | Max JSON nesting SmartCrusher walks; deeper subtrees pass through so pathological nesting can't blow the stack |
 | `model` | `None` | Model name for token counting (selects tokenizer backend) |
 | `enabled_compressors` | `None` (all) | Comma-separated allowlist of compressor names |
 | `ccr` | `true` | Emit CCR markers for dropped material (see [Reversibility](reversibility.md)) |
