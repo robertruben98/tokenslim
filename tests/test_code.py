@@ -204,20 +204,42 @@ def test_single_parse_real_grammar():
 
 
 @requires_ts
-def test_ast_path_not_quadratic():
-    """~200 KB of valid Python (under the cap) compresses well under a loose
-    wall-clock budget — a regression guard against the old O(n^2) behaviour."""
+def test_ast_path_single_parse_scales_linearly():
+    """A block with many functions is still parsed exactly ONCE — the real
+    O(n^2) -> O(n) guarantee (issue #121). The old code re-parsed the buffer up
+    to five times; a constant parse count regardless of function count is the
+    deterministic regression guard.
+
+    The input is kept modest on purpose (~7 KB, well under the cap): the native
+    tree-sitter parser can segfault on some builds/versions (observed on
+    CPython 3.10 + tree-sitter 0.26.0 around ~25 KB of densely-nested defs), so
+    the invariant is asserted by counting parses rather than by stressing the C
+    parser with a huge buffer.
+    """
+    import tokenslim.compressors.code as cm
+
     unit = "def f{i}(a: int, b: int) -> int:\n    total = a + b\n    return total\n\n"
-    src = "".join(unit.format(i=i) for i in range(3000))
-    assert 120_000 < len(src.encode("utf-8")) < 256 * 1024  # exercises the AST path
+    src = "".join(unit.format(i=i) for i in range(100))
+    assert 4_000 < len(src.encode("utf-8")) < 256 * 1024  # many funcs, under the cap
 
-    comp = CodeCompressor(Config())
-    t0 = time.perf_counter()
-    out = comp(src)
-    elapsed = time.perf_counter() - t0
+    calls = {"n": 0}
+    original = cm._parse
 
+    def counting(text_bytes, flavor):
+        calls["n"] += 1
+        return original(text_bytes, flavor)
+
+    saved, cm._parse = cm._parse, counting
+    try:
+        t0 = time.perf_counter()
+        out = CodeCompressor(Config())(src)
+        elapsed = time.perf_counter() - t0
+    finally:
+        cm._parse = saved
+
+    assert calls["n"] == 1  # one parse for 100 functions — not 5, not O(n)
     assert elapsed < 20.0, f"AST compression too slow: {elapsed:.1f}s"
-    assert "total = a + b" not in out  # bodies were elided
+    assert "total = a + b" not in out  # every body was elided from the one tree
 
 
 @requires_ts
