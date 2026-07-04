@@ -130,9 +130,7 @@ def test_single_worker_not_thread_per_event(monkeypatch):
         for _ in range(20):
             telemetry.send_telemetry_event(100, 50, enabled=True)
         telemetry._drain_for_tests(timeout=3.0)
-        workers = [
-            t for t in threading.enumerate() if t.name == "tokenslim-telemetry"
-        ]
+        workers = [t for t in threading.enumerate() if t.name == "tokenslim-telemetry"]
         assert len(workers) <= 1
         assert handler.count == 20
     finally:
