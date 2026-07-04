@@ -109,11 +109,16 @@ prompt pairs):
 
 So `SemanticCache` defaults to **threshold 0.96** *plus* a cheap **lexical
 guard**: numeric/date/month tokens must match exactly, and antonym/negation
-flips (`enable`/`disable`, `add`/`remove`, a one-sided `not`, …) reject the
-candidate. The guard killed every observed high-similarity false positive in
-the experiment; its failure mode is an occasional extra cache miss, never a
-wrong answer. Disable it (`guard=False`) only if wrong-but-similar answers are
-acceptable.
+flips reject the candidate. Matching is **bilingual (EN + ES)** on
+accent-stripped tokens, so both English polarity words (`enable`/`disable`,
+`add`/`remove`, a one-sided `not` — English contractions like `don't` are
+normalized to `not`) and inflected Spanish verbs (`crea`/`borra`,
+`activa`/`desactiva`, `sube`/`baja`, a one-sided `no`/`nunca`/`sin`, …) are
+caught. This closes the known false positive *"crea el usuario admin"* vs
+*"borra el usuario admin"* (cosine ≈ 0.969 ≥ 0.96, opposite action). The guard
+killed every observed high-similarity false positive in the experiment; its
+failure mode is an occasional extra cache miss, never a wrong answer. Disable it
+(`guard=False`) only if wrong-but-similar answers are acceptable.
 
 `Config.semantic_cache_threshold` (env: `TOKENSLIM_SEMANTIC_CACHE_THRESHOLD`)
 carries the same 0.96 default for your own wiring. Thresholds are **not**

@@ -15,9 +15,11 @@ three sentence-transformers models, 120 hand-written EN+ES prompt pairs):
   cosine threshold reaches zero near-miss FPs at useful recall (recall
   collapses to 0-5% at the 0.98-0.99 needed for zero FPs).
 - Defaults here: threshold **0.96** plus a cheap lexical guard (numeric/date
-  token equality + antonym/negation flip detection). The guard killed every
-  observed high-similarity false positive in the experiment; its failure mode
-  is an occasional extra cache miss, never a wrong answer.
+  token equality + antonym/negation flip detection, bilingual EN+ES on
+  accent-stripped tokens: English polarity words and contractions plus inflected
+  Spanish verbs like "crea"/"borra"). The guard killed every observed
+  high-similarity false positive in the experiment; its failure mode is an
+  occasional extra cache miss, never a wrong answer.
 
 The core stays dependency-free: bring any embedding backend satisfying the
 :class:`Embedder` protocol. ``pip install tokenslim[semantic]`` enables
@@ -43,6 +45,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -72,9 +75,35 @@ ANTONYM_PAIRS: tuple[tuple[str, str], ...] = (
     ("start", "stop"),
 )
 
+# Antonym stem pairs for inflected languages (Spanish verbs conjugate, so
+# exact-word matching misses "crea"/"borra"). Matching is *prefix* based on
+# accent-stripped, lowercased word tokens, so every conjugation of a verb is
+# covered: "crea", "crear", "creando", "creado" all start with "crea". Each
+# entry is (stems_side_a, stems_side_b); a one-sided swap between the two sides
+# flips the request's meaning. Kept separate from the exact-word
+# ``ANTONYM_PAIRS`` (English) because that list is a public API surface.
+_ANTONYM_STEM_PAIRS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+    (("crea", "cread"), ("borr", "elimin")),  # crear vs borrar/eliminar
+    (("activ",), ("desactiv",)),  # activar vs desactivar
+    (("conect",), ("desconect",)),  # conectar vs desconectar
+    (("instal",), ("desinstal",)),  # instalar vs desinstalar
+    (("encend", "encien"), ("apag",)),  # encender vs apagar
+    (("sub",), ("baj",)),  # subir vs bajar
+    (("abr", "abri"), ("cerr", "cierr")),  # abrir vs cerrar
+    (("anad", "agreg"), ("quit",)),  # añadir/agregar vs quitar
+    (("inici", "arranc", "empie", "empez"), ("deten", "detien", "par")),  # iniciar vs detener/parar
+    (("permit",), ("deneg", "denie", "prohib", "bloque")),  # permitir vs denegar/prohibir/bloquear
+    (("mostr", "muestr"), ("ocult", "escond")),  # mostrar vs ocultar/esconder
+)
+
 # Words whose mere presence difference flips polarity ("is it safe" vs
-# "is it not safe").
-_NEGATION_WORDS: tuple[str, ...] = ("not",)
+# "is it not safe"). English contractions are expanded to "not" during
+# normalization, so "don't" is covered. Spanish negations included.
+_NEGATION_WORDS: tuple[str, ...] = ("not", "no", "nunca", "jamas", "sin", "tampoco")
+
+# English negative contractions -> "... not ..." so the negation survives
+# tokenization ("don't" would otherwise split into "don" + "t").
+_CONTRACTION_RE = re.compile(r"n['’]t\b")
 
 # ISO dates are kept whole (alternation order matters); other digit runs keep
 # an optional decimal part so "2.5" is one token.
@@ -141,6 +170,25 @@ def _words(text: str) -> set[str]:
     return set(_WORD_RE.findall(text.lower()))
 
 
+def _strip_accents(text: str) -> str:
+    """Drop combining marks so "café"/"añadir" compare as "cafe"/"anadir"."""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+    )
+
+
+def _guard_words(text: str) -> set[str]:
+    """Word tokens normalized for the guard: lowercased, accent-free, with
+    English negative contractions expanded so "don't" yields "not"."""
+    normalized = _CONTRACTION_RE.sub(" not", _strip_accents(text.lower()))
+    return set(_WORD_RE.findall(normalized))
+
+
+def _has_stem(words: set[str], stems: tuple[str, ...]) -> bool:
+    """True when any word starts with one of ``stems`` (prefix match)."""
+    return any(word.startswith(stem) for stem in stems for word in words)
+
+
 def _numeric_tokens(text: str) -> set[str]:
     """Numbers, ISO dates and month names — the tokens that must match exactly."""
     tokens = set(_NUMERIC_RE.findall(text))
@@ -154,17 +202,29 @@ def _lexical_guard(a: str, b: str) -> bool:
     Rejects (returns False) when the numeric/date token sets differ, or when an
     antonym/negation flip is detected — the two failure classes that survive
     any useful cosine threshold (experiment: date swaps and enable/disable
-    flips score 0.96-0.98). A False here only costs a cache miss.
+    flips score 0.96-0.98). Matching is on accent-stripped tokens so Spanish
+    accents never hide a flip, and Spanish antonyms are matched by verb stem so
+    conjugations ("crea"/"borra") are caught. A False here only costs a cache
+    miss, never a wrong answer.
     """
     if _numeric_tokens(a) != _numeric_tokens(b):
         return False
-    words_a, words_b = _words(a), _words(b)
+    words_a, words_b = _guard_words(a), _guard_words(b)
     for negation in _NEGATION_WORDS:
         if (negation in words_a) != (negation in words_b):
             return False
+    # Exact-word antonyms (English polarity words like enable/disable, on/off).
     for x, y in ANTONYM_PAIRS:
         forward = x in words_a and y in words_b and y not in words_a and x not in words_b
         backward = y in words_a and x in words_b and x not in words_a and y not in words_b
+        if forward or backward:
+            return False
+    # Stem antonyms (inflected Spanish verbs like crear/borrar).
+    for stems_x, stems_y in _ANTONYM_STEM_PAIRS:
+        a_has_x, b_has_x = _has_stem(words_a, stems_x), _has_stem(words_b, stems_x)
+        a_has_y, b_has_y = _has_stem(words_a, stems_y), _has_stem(words_b, stems_y)
+        forward = a_has_x and b_has_y and not b_has_x and not a_has_y
+        backward = a_has_y and b_has_x and not b_has_y and not a_has_x
         if forward or backward:
             return False
     return True
