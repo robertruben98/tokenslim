@@ -88,9 +88,16 @@ Head to the [Quickstart](quickstart.md) next.
   `Config(telemetry=True)`. Config wins — `TOKENSLIM_TELEMETRY=off` can
   additionally disable an opt-in, but the env var can never turn telemetry on
   against `Config(telemetry=False)`. See [Telemetry &amp; privacy](#telemetry-privacy).
-- **Never break a request** — compressors return the original text on parse
-  failure or when the output would not be smaller; integration wrappers and the
-  proxy swallow their own errors.
+- **Never break a request** — `compress()` honours a strict never-raise
+  contract: any unforeseen error (a pathologically nested payload, lone UTF-16
+  surrogates, a non-dict message) degrades to a passthrough of the input intact,
+  with the cause recorded on `stats.error` and logged (never printed, never
+  raised). Integration wrappers and the proxy inherit this, so a compression
+  fault can never crash the host app.
+- **Never inflate** — a compressed block is kept only when it is a net token
+  win with its CCR marker cost included; otherwise it reverts, so
+  `stats.new_tokens <= stats.orig_tokens` always holds. Configure the required
+  net savings with `min_token_savings`.
 - **Reversible by default** — CCR is on unless you turn it off.
 - **Zero heavy deps** — tokenizers, tree-sitter, Pillow, and
   sentence-transformers are all optional extras; every integration is

@@ -68,11 +68,17 @@ class CCRMarker:
 
 
 def content_hash(payload: Any) -> str:
-    """Short, stable hash of ``payload`` (serialised deterministically)."""
+    """Short, stable hash of ``payload`` (serialised deterministically).
+
+    Encodes with ``surrogatepass`` so lone UTF-16 surrogates in the payload can
+    never raise UnicodeEncodeError (issue #116).
+    """
     if isinstance(payload, str):
-        data = payload.encode("utf-8")
+        data = payload.encode("utf-8", "surrogatepass")
     else:
-        data = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+        data = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode(
+            "utf-8", "surrogatepass"
+        )
     return hashlib.sha256(data).hexdigest()[:16]
 
 

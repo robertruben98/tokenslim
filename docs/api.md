@@ -15,7 +15,7 @@ import from a submodule is internal and may change without notice.
 | Export | What it is |
 | --- | --- |
 | `compress(messages, options=None, **overrides)` | The entry point — returns `(new_messages, stats)`; never mutates its input |
-| `CompressionStats` | `orig_tokens`, `new_tokens`, `ratio`, `saved_tokens`, `blocks`, `store` |
+| `CompressionStats` | `orig_tokens`, `new_tokens`, `ratio`, `saved_tokens`, `blocks`, `store`, `error` (set when the never-raise barrier caught a fault and passed the input through) |
 | `BlockStat` | Per-block detail: message index, path, content type, confidence, compressor, token delta |
 | `Config` | Frozen dataclass of every knob; `Config.merged(**overrides)` returns a copy |
 | `load_config(env=None, **overrides)` | Defaults → `TOKENSLIM_*` env → overrides |
