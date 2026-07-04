@@ -16,9 +16,14 @@ import os
 from dataclasses import dataclass, fields, replace
 from typing import Any
 
-__all__ = ["Config", "load_config"]
+__all__ = ["Config", "load_config", "AUTO_QUERY"]
 
 _ENV_PREFIX = "TOKENSLIM_"
+
+# Sentinel :attr:`Config.query` value meaning "derive the relevance query from
+# the last user message" (resolved in :func:`tokenslim.compress.compress`).
+# ``query=None`` disables derivation; any other string is used verbatim.
+AUTO_QUERY = "auto"
 
 
 @dataclass(frozen=True)
@@ -108,8 +113,13 @@ class Config:
     html_keep_links: bool = False
 
     # --- Relevance (BM25) ---
-    # Optional query string; when set, compressors can rank by relevance to it.
-    query: str | None = None
+    # Relevance query used by query-aware compressors (SmartCrusher JSON-match,
+    # SearchCompressor BM25, LogCompressor, TextCompressor). Three modes:
+    #   * "auto" (default): compress() derives the query from the last user
+    #     message in the array (issue #124), truncated to a fixed char budget.
+    #   * None: derivation OFF — the exact pre-#124 behavior (no relevance).
+    #   * any other string: used verbatim as the query (caller-forced).
+    query: str | None = AUTO_QUERY
 
     # --- images ---
     # Per-image token budget for reduce_image_tokens (None = provider sweet spot).
