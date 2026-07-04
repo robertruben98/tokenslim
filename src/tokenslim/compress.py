@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import copy
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from .config import Config, load_config
+from .config import AUTO_QUERY, Config, load_config
 from .detector import ContentType
 from .router import ContentRouter
 from .tokenizer import count_tokens
@@ -34,6 +34,10 @@ __all__ = ["compress", "CompressionStats", "BlockStat"]
 logger = logging.getLogger("tokenslim")
 
 Message = dict[str, Any]
+
+# Cap on the auto-derived relevance query (issue #124). A few hundred chars is
+# plenty for BM25/anchor matching while bounding the cost on huge user turns.
+_QUERY_MAX_CHARS = 512
 
 
 def _safe_count(text: str, model: str | None) -> int:
@@ -246,6 +250,79 @@ def _passthrough_totals(messages: Any, config: Config, stats: CompressionStats) 
     return out if isinstance(out, list) else list(messages) if isinstance(messages, list) else out
 
 
+def _user_query_text(content: Any) -> str:
+    """Flatten a user message's plain text (string or ``type=="text"`` blocks).
+
+    Deliberately ignores ``tool_result`` blocks: in the Anthropic shape a tool
+    result rides in a ``role="user"`` message, and its payload is data, not the
+    human's question — so it must never become the derived query.
+    """
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = [
+            block["text"]
+            for block in content
+            if isinstance(block, dict)
+            and block.get("type") == "text"
+            and isinstance(block.get("text"), str)
+        ]
+        return " ".join(parts).strip()
+    return ""
+
+
+def _last_user_message(messages: Any) -> tuple[int, str] | None:
+    """Return ``(index, text)`` of the most recent user turn carrying text.
+
+    Scans from the end for a ``role == "user"`` message with plain text and
+    returns its array index alongside that text. ``None`` when no such message
+    exists, so an array without a user turn costs a single reverse pass.
+    """
+    if not isinstance(messages, list):
+        return None
+    for i in range(len(messages) - 1, -1, -1):
+        msg = messages[i]
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            text = _user_query_text(msg.get("content"))
+            if text:
+                return i, text
+    return None
+
+
+def _derive_query(messages: Any, max_chars: int = _QUERY_MAX_CHARS) -> str | None:
+    """Relevance query from the most recent user message (issue #124), or None.
+
+    The text is truncated to ``max_chars`` — a few hundred chars is plenty for
+    BM25/anchor matching while bounding the cost on huge user turns.
+    """
+    found = _last_user_message(messages)
+    return found[1][:max_chars] if found is not None else None
+
+
+def _resolve_query(config: Config, messages: Any) -> tuple[Config, int | None]:
+    """Resolve the ``Config.query`` sentinel; also report the source index (#124).
+
+    Returns ``(config, source_index)`` where ``source_index`` is the array index
+    of the user message the query was derived from (so the caller can avoid
+    letting that turn filter itself by its own words); ``None`` when nothing was
+    auto-derived. Semantics of ``Config.query``:
+
+    * ``"auto"`` (the default) → derive from the last user message; the sentinel
+      is replaced by the derived string, or by ``None`` when no user message
+      carries text — so downstream compressors only ever see a real query or
+      nothing, never the literal ``"auto"``.
+    * ``None`` → left untouched: derivation is off (exact pre-#124 behavior).
+    * any other string → left untouched: the caller forced this query.
+    """
+    if config.query != AUTO_QUERY:
+        return config, None
+    found = _last_user_message(messages)
+    if found is None:
+        return replace(config, query=None), None
+    index, text = found
+    return replace(config, query=text[:_QUERY_MAX_CHARS]), index
+
+
 def compress(
     messages: list[Message],
     options: Config | None = None,
@@ -297,13 +374,25 @@ def _compress_impl(
         stats.new_tokens = stats.orig_tokens
         return out, stats
 
+    # Resolve the query-aware selection query before routing so JSON-match /
+    # BM25 / log compressors see the real user question (issue #124).
+    config, source_index = _resolve_query(config, messages)
+
     router = ContentRouter(config=config)
     stats.store = router.store
+    # The user turn the query was auto-derived from must not filter itself by
+    # its own words, so it is compressed by a query-less router (sharing the
+    # same CCR store). Forced/absent queries never set source_index.
+    plain_router = router
+    if source_index is not None and config.query is not None:
+        plain_router = ContentRouter(config=replace(config, query=None), store=router.store)
+
     out = _copy_messages(messages)
     for i, msg in enumerate(out):
         # Lax shape validation (#116): non-dict entries pass through untouched.
         if isinstance(msg, dict) and "content" in msg:
-            msg["content"] = _rewrite_content(msg["content"], router, config, i, stats)
+            active = plain_router if i == source_index else router
+            msg["content"] = _rewrite_content(msg["content"], active, config, i, stats)
 
     # Dispatch anonymous usage telemetry
     from .telemetry import send_telemetry_event

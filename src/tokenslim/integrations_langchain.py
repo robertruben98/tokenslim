@@ -192,6 +192,11 @@ def compress_documents(
     objects (``model_copy``/``copy.copy``); the inputs are never mutated.
     Items without a text ``page_content``, or whose compression fails, are
     returned as-is. Works for retriever results and memory payloads alike.
+
+    A document is *content*, not a question: the ``compress()`` auto-query
+    derivation (issue #124) never self-filters the wrapped ``user`` message, so
+    with no ``query`` relevance stays off (pre-#124 behavior). Pass the real
+    retrieval question as ``query`` to keep the rows it references.
     """
     out: list[Any] = []
     for doc in docs:
