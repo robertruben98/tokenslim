@@ -183,7 +183,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def _relay(self, resp: Any) -> int:
         """Stream an upstream response object back to the client, unbuffered."""
-        status = int(getattr(resp, "status", None) or getattr(resp, "code", 502))
+        status = int(getattr(resp, "status", None) or getattr(resp, "code", None) or 502)
         resp_headers = getattr(resp, "headers", None) or {}
         self.send_response(status)
         for name, value in resp_headers.items():
@@ -267,6 +267,8 @@ def run_proxy(
     """Run the compressing reverse proxy until interrupted (blocking)."""
     server = make_proxy_server(port=port, upstream=upstream, config=config, host=host)
     bound_host, bound_port = server.server_address[0], server.server_address[1]
+    if isinstance(bound_host, bytes):
+        bound_host = bound_host.decode()
     print(
         f"[tokenslim.proxy] listening on {bound_host or '0.0.0.0'}:{bound_port}"
         f" -> {server.upstream}",
