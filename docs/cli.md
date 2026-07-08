@@ -20,6 +20,7 @@ Usage: tokenslim [OPTIONS] COMMAND [ARGS]...
 | [`wrap`](#wrap) | Run any command with `TOKENSLIM_ENABLED=true` injected |
 | [`learn`](#learn) | Mine captured session failures into agent rules |
 | [`refresh-pricing`](#refresh-pricing) | Refresh the local model-pricing cache |
+| [`mcp`](#mcp) | Serve the compression layer over the Model Context Protocol |
 | [`install`](#install) | Register the MCP server across agent platforms |
 | [`memory`](#memory) / [`update`](#update) | Placeholders for later milestones |
 
@@ -54,6 +55,9 @@ TokenSlim version: 0.3.0
 Python version: 3.12.8
 ✓ tiktoken: Installed (accurate token counting enabled)
 ✗ magika: Not installed (using rule-based detector)
+✓ mcp: SDK installed (MCP server available)
+  MCP server OK — tools: compress_text
+  mcp: not registered in any agent (run: tokenslim install)
 
 Resolved Configuration:
   TOKENSLIM_CCR: True
@@ -196,15 +200,34 @@ tokenslim refresh-pricing
 tokenslim refresh-pricing --url https://example.com/pricing.json
 ```
 
+## mcp
+
+Runs the TokenSlim MCP server over stdio so agents can call the compression
+layer directly. The server is shipped inside this package — install its deps
+with the `mcp` extra:
+
+```bash
+pip install "tokenslim[mcp]"
+tokenslim mcp            # serve over stdio (an agent normally launches this)
+tokenslim mcp --check    # build the server, list its tools, and exit
+```
+
+It exposes a `compress_text` tool that compresses a block of text and returns
+the compressed text plus original/compressed token counts.
+
 ## install
 
 Registers the TokenSlim MCP server across agent platforms (Claude Code,
-Cursor). Requires the separate `tokenslim-mcp` package:
+Cursor) by pointing them at the local `tokenslim mcp` command — no separate
+package required. Install the server deps first (`pip install "tokenslim[mcp]"`):
 
 ```bash
-pip install tokenslim-mcp
-tokenslim install
+tokenslim install                       # all known agents
+tokenslim install --agent claude-code   # just one (repeatable)
 ```
+
+Each agent's `mcpServers` config is updated in place (idempotent). Verify the
+registered server starts with `tokenslim doctor`.
 
 !!! note
     This is unrelated to the repository's `install.sh` / `install.ps1`

@@ -52,7 +52,9 @@ strands = ["strands-agents>=1.0"]
 langchain = ["langchain-core>=0.3"]
 # Future extras (reserved; land in later milestones).
 proxy = []
-mcp = []
+# MCP server (`tokenslim mcp` / `tokenslim install`): served from this package
+# via the official Model Context Protocol SDK (FastMCP).
+mcp = ["mcp>=1.0"]
 code = [
     "tree-sitter>=0.21",
     "tree-sitter-python>=0.21",
@@ -71,6 +73,7 @@ dev = [
     "tree-sitter-python>=0.21",
     "tree-sitter-javascript>=0.21",
     "pillow>=10",
+    "mcp>=1.0",
 ]
 
 [tool.hatch.build.targets.wheel]

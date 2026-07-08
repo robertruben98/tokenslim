@@ -43,8 +43,24 @@ def test_cli_init():
             assert "TOKENSLIM_MODEL=gpt-4o" in content
 
 
-def test_cli_install_fallback() -> None:
+def test_cli_install_registers_local_command(tmp_path, monkeypatch) -> None:
+    from dataclasses import replace
+
+    from tokenslim import mcp_server
+
+    # Retarget both agents' config files into the tmp dir.
+    for key, name in (("claude-code", "claude.json"), ("cursor", "cursor.json")):
+        monkeypatch.setitem(
+            mcp_server.AGENTS, key, replace(mcp_server.AGENTS[key], path=tmp_path / name)
+        )
+
     runner = CliRunner()
-    result = runner.invoke(main, ["install"])
-    assert result.exit_code == 1
-    assert "tokenslim-mcp is not installed" in result.output
+    result = runner.invoke(main, ["install", "--agent", "claude-code"])
+    if "SDK is not installed" in result.output:
+        # build_server() guard fires when the mcp extra is absent.
+        assert result.exit_code == 1
+        return
+    assert result.exit_code == 0
+    assert "tokenslim-mcp" not in result.output
+    data = json.loads((tmp_path / "claude.json").read_text(encoding="utf-8"))
+    assert data["mcpServers"]["tokenslim"]["args"] == ["-m", "tokenslim", "mcp"]
