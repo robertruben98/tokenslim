@@ -326,6 +326,8 @@ def _resolve_query(config: Config, messages: Any) -> tuple[Config, int | None]:
 def compress(
     messages: list[Message],
     options: Config | None = None,
+    *,
+    store: CCRStore | None = None,
     **overrides: Any,
 ) -> tuple[list[Message], CompressionStats]:
     """Compress large text blocks in a message array.
@@ -334,6 +336,10 @@ def compress(
         messages: An OpenAI- or Anthropic-style message array.
         options: A resolved :class:`Config`. If omitted, config is loaded from
             environment variables and ``overrides``.
+        store: A pre-built :class:`~tokenslim.store.CCRStore` to reuse for
+            dropped originals. Pass a long-lived, shared store (e.g. one built
+            once by the proxy) so reversibility survives across calls and process
+            restarts; when ``None`` a store is built from ``config`` as before.
         **overrides: Per-call config overrides (e.g. ``min_bytes=0``).
 
     Returns:
@@ -345,7 +351,7 @@ def compress(
     stats = CompressionStats()
 
     try:
-        return _compress_impl(messages, config, stats)
+        return _compress_impl(messages, config, stats, store)
     except Exception as exc:
         # Perimeter barrier (#116): never let compression crash the caller.
         logger.warning(
@@ -361,6 +367,7 @@ def _compress_impl(
     messages: list[Message],
     config: Config,
     stats: CompressionStats,
+    store: CCRStore | None = None,
 ) -> tuple[list[Message], CompressionStats]:
     """Core compression walk (wrapped by the never-raise barrier in compress)."""
     if not config.enabled:
@@ -378,7 +385,7 @@ def _compress_impl(
     # BM25 / log compressors see the real user question (issue #124).
     config, source_index = _resolve_query(config, messages)
 
-    router = ContentRouter(config=config)
+    router = ContentRouter(config=config, store=store)
     stats.store = router.store
     # The user turn the query was auto-derived from must not filter itself by
     # its own words, so it is compressed by a query-less router (sharing the

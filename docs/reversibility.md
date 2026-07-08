@@ -91,6 +91,31 @@ With `ccr=False` compression still runs, but SmartCrusher drops silently and
 no markers or store writes happen — use it only when reversibility genuinely
 does not matter.
 
+### Through the proxy
+
+`tokenslim proxy` builds **one** shared store at start-up and reuses it for
+every request, so the originals it drops outlive the request that created them.
+Because the default `memory` backend cannot survive that long, the proxy
+transparently upgrades it to a persistent `SQLiteCCRStore` at `ccr_path`
+(honouring `ccr_ttl`); set `TOKENSLIM_CCR_BACKEND` to `sqlite`/`redis` to pick
+your own. Expand a marker the proxy emitted with the local retrieve endpoint:
+
+```bash
+curl "http://localhost:8787/tokenslim/retrieve?hash=9f3ab61c2e77d105"
+# -> {"hash": "9f3ab61c2e77d105", "original": "…"}
+# ?marker=<<ccr:HASH N reason>> is accepted too.
+```
+
+or from the CLI, pointed at the same backend:
+
+```bash
+TOKENSLIM_CCR_BACKEND=sqlite TOKENSLIM_CCR_PATH=./tokenslim_ccr.sqlite3 \
+  tokenslim retrieve "<<ccr:9f3ab61c2e77d105 492 middle-elided>>"
+```
+
+Both keep working after the request finishes and after the proxy restarts, as
+long as the record is still within its TTL.
+
 ## Scoped retrieval with CCRContext
 
 `CCRContext` guards a retrieval tool against fetching arbitrary store contents:
