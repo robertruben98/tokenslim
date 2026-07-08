@@ -179,7 +179,7 @@ def apply_output_reduction(
         suggested_max_tokens=suggest_max_tokens(prediction, safety=_SAFETY_BY_LEVEL[level]),
     )
 
-    out: list[dict[str, Any]] = copy.deepcopy(list(messages))
+    out: list[dict[str, Any]] = [copy.deepcopy(dict(msg)) for msg in messages]
     if instructions:
         _append_instructions(out, instructions)
     return out, report
