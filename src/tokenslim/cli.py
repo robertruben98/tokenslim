@@ -186,6 +186,32 @@ def proxy(port: int | None, upstream: str | None) -> None:
 
 
 @main.command()
+@click.argument("marker")
+def retrieve(marker: str) -> None:
+    """Expand a CCR MARKER (or bare hash) back to its original material.
+
+    Reads the store selected by the TOKENSLIM_CCR_* env vars, so point it at the
+    same backend the compression used (e.g. TOKENSLIM_CCR_BACKEND=sqlite with a
+    shared TOKENSLIM_CCR_PATH) to reverse markers across processes and restarts.
+    """
+    from .ccr import parse_marker
+    from .retrieve import retrieve as retrieve_original
+
+    cfg = load_config()
+    parsed = parse_marker(marker)
+    hash_ = parsed.hash if parsed is not None else marker
+    original = retrieve_original(hash_, config=cfg)
+    if original is None:
+        click.echo(
+            f"No CCR record for {hash_!r} (backend={cfg.ccr_backend}). "
+            "It may have expired or been stored under a different backend.",
+            err=True,
+        )
+        sys.exit(1)
+    click.echo(original)
+
+
+@main.command()
 @click.option(
     "--sessions",
     "sessions_path",

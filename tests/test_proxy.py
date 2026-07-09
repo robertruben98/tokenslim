@@ -6,10 +6,12 @@ records everything it receives, then drives it with plain HTTP clients.
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -17,9 +19,10 @@ import pytest
 from click.testing import CliRunner
 
 from tokenslim import __version__
+from tokenslim.ccr import find_markers
 from tokenslim.cli import main
 from tokenslim.config import Config, load_config
-from tokenslim.proxy import make_proxy_server
+from tokenslim.proxy import RETRIEVE_PATH, make_proxy_server
 
 
 class _FakeUpstreamHandler(BaseHTTPRequestHandler):
@@ -63,6 +66,17 @@ class _FakeUpstreamHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+            return
+
+        if self.path == "/v1/truncate":
+            # Promise 1000 bytes, deliver a handful, then drop the connection —
+            # the classic "upstream cut short (length/network)" failure.
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "1000")
+            self.end_headers()
+            self.wfile.write(b'{"partial": true}')
+            self.wfile.flush()
             return
 
         try:
@@ -119,6 +133,32 @@ def _post(url: str, body: bytes, headers: dict[str, str] | None = None) -> tuple
     req = urllib.request.Request(url, data=body, headers=all_headers, method="POST")
     with urllib.request.urlopen(req, timeout=10) as resp:
         return resp.status, resp.read()
+
+
+def _get_json(url: str) -> tuple[int, dict]:
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return resp.status, json.loads(resp.read())
+
+
+@contextlib.contextmanager
+def _proxy_stack(config: Config):
+    """Yield ``(proxy_url, upstream)`` for a proxy+fake-upstream on ``config``."""
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), _FakeUpstreamHandler)
+    upstream.requests = []
+    upstream.gate = threading.Event()
+    threading.Thread(target=upstream.serve_forever, daemon=True).start()
+    upstream_url = f"http://127.0.0.1:{upstream.server_address[1]}"
+
+    proxy = make_proxy_server(port=0, upstream=upstream_url, config=config, host="127.0.0.1")
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
+    try:
+        yield proxy_url, upstream
+    finally:
+        proxy.shutdown()
+        proxy.server_close()
+        upstream.shutdown()
+        upstream.server_close()
 
 
 def _big_json_message() -> str:
@@ -285,3 +325,92 @@ def test_cli_proxy_help_lists_flags():
     assert "--port" in result.output
     assert "--upstream" in result.output
     assert "reverse proxy" in result.output
+
+
+def test_proxy_upgrades_memory_backend_to_persistent_sqlite(tmp_path):
+    from tokenslim.store import SQLiteCCRStore
+
+    cfg = Config(ccr_backend="memory", ccr_path=str(tmp_path / "ccr.sqlite3"))
+    with _proxy_stack(cfg) as (_proxy_url, _upstream):
+        pass
+    # The default in-memory store is upgraded to a persistent SQLite file so
+    # reversibility survives the request that fills it (issue #119).
+    proxy = make_proxy_server(port=0, upstream="http://x", config=cfg, host="127.0.0.1")
+    try:
+        assert isinstance(proxy.store, SQLiteCCRStore)
+    finally:
+        proxy.server_close()
+
+
+def test_proxy_ccr_reversible_across_requests_and_restart(tmp_path):
+    ccr_path = str(tmp_path / "ccr.sqlite3")
+    cfg = Config(ccr_backend="sqlite", ccr_path=ccr_path)
+    original = _big_json_message()
+    body = json.dumps(
+        {"model": "gpt-4o", "messages": [{"role": "user", "content": original}]}
+    ).encode("utf-8")
+
+    with _proxy_stack(cfg) as (proxy_url, upstream):
+        status, _ = _post(f"{proxy_url}/v1/chat/completions", body)
+        assert status == 200
+        sent = json.loads(upstream.requests[0]["body"])["messages"][0]["content"]
+        markers = find_markers(sent)
+        assert markers, "the compressed request must carry a retrievable CCR marker"
+        hash_ = markers[0].hash
+
+        # After the request has fully completed, the marker still expands: the
+        # store is not the ephemeral per-request dict that broke reversibility.
+        status, payload = _get_json(f"{proxy_url}{RETRIEVE_PATH}?hash={hash_}")
+        assert status == 200
+        assert payload["hash"] == hash_
+        assert "row-30" in payload["original"], "dropped middle rows must be recoverable"
+
+    # After a restart (fresh proxy on the same SQLite file), the marker the
+    # first process minted is still expandable — within TTL, across restarts.
+    with _proxy_stack(cfg) as (proxy_url, _upstream):
+        marker_token = f"<<ccr:{hash_} {markers[0].count} {markers[0].reason}>>"
+        url = f"{proxy_url}{RETRIEVE_PATH}?marker={urllib.parse.quote(marker_token)}"
+        status, payload = _get_json(url)
+        assert status == 200
+        assert "row-30" in payload["original"]
+
+
+def test_retrieve_endpoint_reports_misses(tmp_path):
+    cfg = Config(ccr_backend="sqlite", ccr_path=str(tmp_path / "ccr.sqlite3"))
+    with _proxy_stack(cfg) as (proxy_url, _upstream):
+        with pytest.raises(urllib.error.HTTPError) as miss:
+            _get_json(f"{proxy_url}{RETRIEVE_PATH}?hash=deadbeef")
+        assert miss.value.code == 404
+        with pytest.raises(urllib.error.HTTPError) as bad:
+            _get_json(f"{proxy_url}{RETRIEVE_PATH}")
+        assert bad.value.code == 400
+
+
+def test_truncated_upstream_not_relayed_as_complete_200(proxy_env):
+    proxy_url, _upstream = proxy_env
+    # The upstream promises 1000 bytes but delivers ~17 then drops. The proxy
+    # must surface that as a truncated read, never a silent, "complete" 200.
+    with pytest.raises(http.client.IncompleteRead):
+        _post(f"{proxy_url}/v1/truncate", b"{}")
+
+
+def test_cli_retrieve_expands_marker(tmp_path, monkeypatch):
+    from tokenslim.ccr import make_marker
+    from tokenslim.store import SQLiteCCRStore
+
+    path = str(tmp_path / "ccr.sqlite3")
+    store = SQLiteCCRStore(path)
+    hash_ = store.put("the full original payload")
+    store.close()
+
+    monkeypatch.setenv("TOKENSLIM_CCR_BACKEND", "sqlite")
+    monkeypatch.setenv("TOKENSLIM_CCR_PATH", path)
+    runner = CliRunner()
+
+    hit = runner.invoke(main, ["retrieve", make_marker(hash_, 3)])
+    assert hit.exit_code == 0
+    assert "the full original payload" in hit.output
+
+    miss = runner.invoke(main, ["retrieve", "deadbeef"])
+    assert miss.exit_code == 1
+    assert "No CCR record" in miss.output
