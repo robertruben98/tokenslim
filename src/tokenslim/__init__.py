@@ -105,7 +105,7 @@ from .sizer import compute_optimal_k
 from .store import CCRStore, InMemoryCCRStore, SQLiteCCRStore, get_store
 from .tokenizer import count_tokens, get_tokenizer
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "__version__",

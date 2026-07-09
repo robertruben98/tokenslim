@@ -11,7 +11,7 @@ Three layers, cheapest first:
   (``passthrough`` / ``downscale`` / ``detail-low``) for one image.
 - :func:`reduce_image_tokens` — walks a message array, decodes embedded
   base64 images and applies the plans. Pillow is optional (``pip install
-  tokenslim[images]``): with it, images are actually resized and re-encoded;
+  tokenslim-ai[images]``): with it, images are actually resized and re-encoded;
   without it, dimensions are read from PNG/JPEG/GIF headers and downscale
   plans are reported in the stats but the messages pass through unchanged.
 """

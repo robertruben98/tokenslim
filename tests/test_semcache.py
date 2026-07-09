@@ -366,7 +366,7 @@ def test_sentence_transformer_embedder_requires_extra():
         pass
     else:
         pytest.skip("sentence-transformers is installed; ImportError path untestable")
-    with pytest.raises(ImportError, match=r"tokenslim\[semantic\]"):
+    with pytest.raises(ImportError, match=r"tokenslim-ai\[semantic\]"):
         SentenceTransformerEmbedder()
 
 

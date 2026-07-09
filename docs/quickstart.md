@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-pip install tokenslim
+pip install tokenslim-ai
 ```
 
 Optional extras (all independent — install what you need):
@@ -20,7 +20,7 @@ Optional extras (all independent — install what you need):
 | `docs` | mkdocs-material, for building this documentation site |
 
 ```bash
-pip install "tokenslim[tokenizers,images,semantic]"
+pip install "tokenslim-ai[tokenizers,images,semantic]"
 ```
 
 Or run the install script from the repository root — it prefers `pipx` when

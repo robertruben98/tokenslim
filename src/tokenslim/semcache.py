@@ -22,7 +22,7 @@ three sentence-transformers models, 120 hand-written EN+ES prompt pairs):
   occasional extra cache miss, never a wrong answer.
 
 The core stays dependency-free: bring any embedding backend satisfying the
-:class:`Embedder` protocol. ``pip install tokenslim[semantic]`` enables
+:class:`Embedder` protocol. ``pip install tokenslim-ai[semantic]`` enables
 :class:`SentenceTransformerEmbedder` (recommended model
 ``BAAI/bge-small-en-v1.5`` — the experiment's best safety/recall trade-off at
 threshold 0.96; prefer a multilingual model for heavy non-English traffic).
@@ -325,7 +325,7 @@ class SemanticCache:
 class SentenceTransformerEmbedder:
     """:class:`Embedder` backed by sentence-transformers (optional extra).
 
-    Requires ``pip install tokenslim[semantic]``. The default model is the
+    Requires ``pip install tokenslim-ai[semantic]``. The default model is the
     calibration experiment's recommendation for threshold 0.96. Thresholds are
     NOT transferable between models — recalibrate if you swap models.
     """
@@ -336,7 +336,7 @@ class SentenceTransformerEmbedder:
         except ImportError as exc:
             raise ImportError(
                 "sentence-transformers is required for SentenceTransformerEmbedder. "
-                "Install it with: pip install tokenslim[semantic]"
+                "Install it with: pip install tokenslim-ai[semantic]"
             ) from exc
         self._model = SentenceTransformer(model_name, device=device)  # pragma: no cover
 

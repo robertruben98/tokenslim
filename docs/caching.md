@@ -79,7 +79,7 @@ exact match or embedding-cosine-close to a cached one:
 ```python
 from tokenslim import SemanticCache, SentenceTransformerEmbedder
 
-cache = SemanticCache(SentenceTransformerEmbedder())   # pip install "tokenslim[semantic]"
+cache = SemanticCache(SentenceTransformerEmbedder())   # pip install "tokenslim-ai[semantic]"
 
 if (hit := cache.get(prompt)) is not None:
     return hit.response          # hit.similarity, hit.key_prompt for auditing
