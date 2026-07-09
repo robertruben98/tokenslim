@@ -114,6 +114,16 @@ class Config:
     # and error recovery on huge or malformed payloads (issue #121). Default
     # 256 KiB; set to 0 to disable the cap.
     code_ast_max_bytes: int = 256 * 1024
+    # Blocks at or above this many UTF-8 bytes have their tree-sitter parse run in
+    # an isolated subprocess, so a native segfault on dense code (issue #142:
+    # observed ~25 KB of Python defs on CPython 3.10) crashes only the worker and
+    # falls back to the text compressor instead of killing the host. Smaller
+    # blocks parse in-process (no subprocess overhead). Set to 0 to disable
+    # isolation; only takes effect below code_ast_max_bytes.
+    code_ast_subprocess_bytes: int = 16 * 1024
+    # Max seconds to wait for the isolated parse before terminating the worker and
+    # falling back to text (guards against a hung / pathological parse).
+    code_ast_subprocess_timeout: float = 30.0
 
     # --- HtmlExtractor ---
     # Keep hyperlink targets as "text (url)" instead of dropping the URL.
