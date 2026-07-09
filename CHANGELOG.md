@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `docs.yml` workflow: builds the mkdocs-material site with `mkdocs build
+  --strict` on every PR that touches `docs/`, `mkdocs.yml`, or `src/`, and
+  deploys it to GitHub Pages on push to `main`. Fixes the 404 at the
+  documentation link advertised in the README.
+
 ## [0.4.0] - 2026-07-09
 
 First tagged release and PyPI publication.
