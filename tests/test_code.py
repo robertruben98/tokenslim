@@ -1,3 +1,5 @@
+import multiprocessing as mp
+import os
 import time
 import types
 
@@ -8,6 +10,10 @@ from tokenslim.compressors import code as code_mod
 from tokenslim.compressors.code import CodeCompressor, detect_language
 from tokenslim.config import Config
 from tokenslim.store import InMemoryCCRStore
+
+requires_fork = pytest.mark.skipif(
+    "fork" not in mp.get_all_start_methods(), reason="fork start method unavailable"
+)
 
 # --- Fake tree-sitter AST so the single-parse guarantee is testable even when
 #     the tree-sitter grammars aren't installed in the environment. ----------
@@ -86,6 +92,58 @@ def test_size_cap_skips_ast_and_falls_back(monkeypatch):
 
 def test_config_default_code_ast_cap():
     assert Config().code_ast_max_bytes == 256 * 1024
+
+
+def test_config_default_subprocess_isolation():
+    cfg = Config()
+    assert cfg.code_ast_subprocess_bytes == 16 * 1024
+    assert cfg.code_ast_subprocess_timeout == 30.0
+    # The isolation threshold must sit below the crash cap to take effect (#142).
+    assert cfg.code_ast_subprocess_bytes < cfg.code_ast_max_bytes
+
+
+@requires_fork
+def test_large_block_parses_in_subprocess_and_replays_ccr(monkeypatch):
+    """A block over the isolation threshold is compacted in a worker process, and
+    the elided original is replayed into the caller's CCR store (#142).
+
+    The fake tree keeps the round-trip deterministic without stressing the native
+    parser; the forked worker inherits the monkeypatched parse.
+    """
+    monkeypatch.setattr(code_mod, "HAS_TREE_SITTER", True)
+    monkeypatch.setattr(code_mod, "_parse", lambda text_bytes, flavor: _fake_python_tree())
+
+    store = InMemoryCCRStore()
+    # A tiny threshold forces the small fake source down the subprocess path.
+    out = CodeCompressor(Config(code_ast_subprocess_bytes=8), store=store)(_FAKE_PY_SRC)
+
+    assert "def f():" in out
+    assert "return 1" not in out  # body elided in the worker
+    markers = find_markers(out)
+    assert markers, "the isolated worker must still emit a CCR marker"
+    # The record was produced in the worker and replayed into the parent store.
+    original = store.get(markers[0].hash)
+    assert original is not None and "return 1" in original
+
+
+@requires_fork
+def test_subprocess_isolation_survives_worker_crash(monkeypatch):
+    """A worker that dies like a native segfault falls back to text instead of
+    taking the host process down (#142)."""
+
+    def _crashing_worker(conn, text, config, has_store):
+        os._exit(139)  # 128 + SIGSEGV(11): die without sending a result
+
+    monkeypatch.setattr(code_mod, "HAS_TREE_SITTER", True)
+    monkeypatch.setattr(code_mod, "_ast_worker", _crashing_worker)
+
+    src = "x = 1\n" * 4000  # ~24 KB, over the default isolation threshold
+    assert len(src.encode("utf-8")) >= Config().code_ast_subprocess_bytes
+
+    out = CodeCompressor(Config())(src)
+    # We are still alive, and got the text-compressor fallback string back.
+    assert isinstance(out, str)
+    assert out
 
 
 def test_detect_language():
@@ -240,6 +298,26 @@ def test_ast_path_single_parse_scales_linearly():
     assert calls["n"] == 1  # one parse for 100 functions — not 5, not O(n)
     assert elapsed < 20.0, f"AST compression too slow: {elapsed:.1f}s"
     assert "total = a + b" not in out  # every body was elided from the one tree
+
+
+@requires_ts
+def test_isolated_ast_path_real_grammar_survives():
+    """A well-formed block over the isolation threshold is parsed in a subprocess
+    without taking the host down; if it elided, the CCR round-trips (#142)."""
+    unit = "def f{i}(a: int) -> int:\n    return a + {i}\n\n\n"
+    src = "".join(unit.format(i=i) for i in range(400))
+    n = len(src.encode("utf-8"))
+    assert Config().code_ast_subprocess_bytes <= n < Config().code_ast_max_bytes
+
+    store = InMemoryCCRStore()
+    out = CodeCompressor(Config(), store=store)(src)
+
+    assert isinstance(out, str) and out  # process survived the isolated parse
+    markers = find_markers(out)
+    if markers:  # AST path succeeded (did not fall back to text)
+        assert "def f0(a: int) -> int:" in out
+        assert "return a + 0" not in out
+        assert store.get(markers[0].hash) is not None
 
 
 @requires_ts

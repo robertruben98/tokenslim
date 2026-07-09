@@ -9,14 +9,25 @@ bodies) instead of re-parsing the buffer up to five times. Blocks larger than
 ``config.code_ast_max_bytes`` skip the AST path entirely and fall back to the
 text compressor, so a pathological payload can never turn into a super-linear
 parse / error-recovery.
+
+Crash isolation (issue #142): the native tree-sitter parser can SIGSEGV on
+dense input (observed ~25 KB of Python defs on CPython 3.10). A segfault kills
+the whole host — it is not a Python exception, so ``compress()``'s never-raise
+contract cannot catch it. Blocks at or above ``config.code_ast_subprocess_bytes``
+therefore run the parse in an isolated subprocess: if the worker dies the parent
+detects the closed pipe and falls back to the text compressor instead of going
+down with it. Smaller blocks (the common case) parse in-process to avoid the
+spawn overhead.
 """
 
 from __future__ import annotations
 
+import contextlib
+import multiprocessing as mp
 import re
 from typing import TYPE_CHECKING, Any
 
-from ..ccr import text_marker
+from ..ccr import content_hash, text_marker
 from ..config import Config
 from ..detector import ContentType
 
@@ -106,6 +117,61 @@ def detect_language(text: str) -> str | None:
     return None if detected is None else detected[0]
 
 
+# --- Subprocess isolation for the native parse (issue #142) -------------------
+
+
+class _CollectingStore:
+    """A CCR store that records originals instead of persisting them.
+
+    Used inside the isolation worker: the caller's real store (in-memory, SQLite,
+    Redis) is not shared across the process boundary, so the worker gathers the
+    elided originals and hands them back for the parent to replay. ``put`` returns
+    the same content hash the real store would, so the emitted markers match.
+    """
+
+    def __init__(self) -> None:
+        self.records: list[str] = []
+
+    def put(self, original: str) -> str:
+        self.records.append(original)
+        return content_hash(original)
+
+    def get(self, hash: str) -> str | None:  # pragma: no cover - never read here
+        return None
+
+
+def _mp_context() -> Any:
+    """Return a multiprocessing context, preferring ``fork`` (cheap, COW).
+
+    ``fork`` avoids re-importing the world and re-parsing the grammar on every
+    call; where it is unavailable (Windows, some macOS setups) ``spawn`` is used
+    — the worker target and its args are all picklable, so both work.
+    """
+    methods = mp.get_all_start_methods()
+    return mp.get_context("fork" if "fork" in methods else "spawn")
+
+
+def _ast_worker(conn: Any, text: str, config: Config, has_store: bool) -> None:
+    """Child-process entry point: AST-compress ``text`` and send back the result.
+
+    Runs in an isolated subprocess so a native tree-sitter segfault crashes only
+    this worker; the parent then sees the closed pipe and falls back to text.
+    Sends ``(True, compressed, records)`` on success — ``records`` being the
+    elided originals for the parent to replay into the real CCR store — or
+    ``(False, None, [])`` on an ordinary Python error.
+    """
+    try:
+        store = _CollectingStore() if has_store else None
+        compressed = CodeCompressor(config, store)._ast_compress(text)
+        records = store.records if store is not None else []
+        conn.send((True, compressed, records))
+    except Exception:
+        with contextlib.suppress(Exception):  # pragma: no cover - pipe already gone
+            conn.send((False, None, []))
+    finally:
+        conn.close()
+
+
 class CodeCompressor:
     """AST-aware code compressor using tree-sitter.
 
@@ -139,6 +205,29 @@ class CodeCompressor:
         if cap and cap > 0 and len(text_bytes) > cap:
             return self._text_fallback(text, content_type)
 
+        # Crash isolation (issue #142): the native parser can SIGSEGV on dense
+        # input and a segfault takes the whole host down. Blocks at/above the
+        # threshold parse in a subprocess so a crash falls back to text; smaller
+        # blocks stay in-process to avoid the spawn cost. A threshold of 0
+        # disables isolation.
+        iso = self.config.code_ast_subprocess_bytes
+        if iso and iso > 0 and len(text_bytes) >= iso:
+            isolated = self._ast_compress_isolated(text)
+            if isolated is not None:
+                return isolated
+            return self._text_fallback(text, content_type)
+
+        return self._ast_compress(text)
+
+    def _ast_compress(self, text: str) -> str:
+        """Run the in-process tree-sitter AST path and return the compacted source.
+
+        Detection, block collection, docstring extraction and body elision all
+        reuse a SINGLE parse tree (issue #121). Returns ``text`` unchanged when
+        the block is not recognised code or has no elidable bodies.
+        """
+        text_bytes = text.encode("utf-8")
+
         detected = _detect_and_parse(text_bytes)
         if detected is None:
             return text
@@ -150,6 +239,50 @@ class CodeCompressor:
             return text
 
         return self._elide(text_bytes, blocks, flavor)
+
+    def _ast_compress_isolated(self, text: str) -> str | None:
+        """Run the AST path in a subprocess; ``None`` means 'fall back to text'.
+
+        Isolates the native parse so a segfault on dense input (issue #142) kills
+        only the worker. Returns the compacted source on success, or ``None`` when
+        the worker crashes, times out, or errors — the caller then uses the linear
+        text compressor. Elided originals produced in the worker are replayed into
+        this instance's CCR store so reversibility is preserved.
+        """
+        ctx = _mp_context()
+        parent_conn, child_conn = ctx.Pipe()
+        proc = ctx.Process(
+            target=_ast_worker,
+            args=(child_conn, text, self.config, self.store is not None),
+            daemon=True,
+        )
+        proc.start()
+        # Only the child keeps its end open, so a crash closes the pipe and the
+        # parent sees EOF immediately instead of blocking for the full timeout.
+        child_conn.close()
+
+        timeout = self.config.code_ast_subprocess_timeout
+        payload: Any = None
+        try:
+            if not parent_conn.poll(timeout if timeout and timeout > 0 else None):
+                proc.terminate()  # still parsing past the deadline: give up
+                return None
+            payload = parent_conn.recv()
+        except EOFError:
+            return None  # worker died (segfault) before sending anything
+        finally:
+            parent_conn.close()
+            proc.join(timeout=1.0)
+            if proc.is_alive():
+                proc.terminate()
+
+        ok, compressed, records = payload
+        if not ok or compressed is None:
+            return None
+        if self.store is not None:
+            for original in records:
+                self.store.put(original)
+        return compressed
 
     def _collect_blocks(self, tree: Any, flavor: str) -> list[Any]:
         """Return function/method body nodes to elide, in source order.
