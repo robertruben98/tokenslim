@@ -3,8 +3,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tokenslim"
-version = "0.3.0"
+# Distribution name on PyPI. The bare `tokenslim` name is taken by an unrelated
+# project, so we publish as `tokenslim-ai` (mirrors headroom → headroom-ai).
+# The importable package and the `tokenslim` CLI command are unchanged.
+name = "tokenslim-ai"
+version = "0.4.0"
 description = "Context compression layer for LLM agents — compress tool outputs, logs, files & RAG before they hit the model. Reversible, local-first."
 readme = "README.md"
 requires-python = ">=3.10"

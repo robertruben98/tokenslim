@@ -2,8 +2,8 @@
 # install.sh — install the TokenSlim CLI and library.
 #
 # Usage:
-#   sh install.sh                # install tokenslim
-#   sh install.sh --with-extras  # install tokenslim[tokenizers,images,semantic]
+#   sh install.sh                # install tokenslim-ai
+#   sh install.sh --with-extras  # install tokenslim-ai[tokenizers,images,semantic]
 #
 # Behavior:
 #   * Uses pipx when available (isolated CLI install), otherwise
@@ -16,8 +16,8 @@
 
 set -eu
 
-SPEC="tokenslim"
-EXTRAS_SPEC="tokenslim[tokenizers,images,semantic]"
+SPEC="tokenslim-ai"
+EXTRAS_SPEC="tokenslim-ai[tokenizers,images,semantic]"
 
 usage() {
     printf '%s\n' \

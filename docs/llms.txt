@@ -2,7 +2,7 @@
 
 > Context compression layer for LLM agents: it detects the content type of every large text block in an OpenAI/Anthropic-style message array (JSON, logs, search results, diffs, code, HTML, CSV, prose) and routes it to a purpose-built compressor, typically removing 60-95% of tokens. Lossy drops are reversible: originals go to a content-addressed CCR store and a `<<ccr:HASH N reason>>` marker in the output is the retrieval key. Local-first, dependency-light (click + numpy), Python 3.10+.
 
-Install with `pip install tokenslim` (or the repo's `install.sh` / `install.ps1`). The Python entry point is `compress(messages) -> (new_messages, stats)`; the CLI is `tokenslim`.
+Install with `pip install tokenslim-ai` (or the repo's `install.sh` / `install.ps1`). The Python entry point is `compress(messages) -> (new_messages, stats)`; the CLI is `tokenslim`.
 
 ## Docs
 

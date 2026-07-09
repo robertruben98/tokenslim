@@ -10,7 +10,7 @@ Context compression layer for LLM agents — compress tool outputs, logs, files 
 
 ```bash
 pip install -e ".[dev]"        # development
-pip install tokenslim          # (once published)
+pip install tokenslim-ai       # published on PyPI (imports as `tokenslim`)
 ```
 
 Optional extras: `tokenizers` (accurate tiktoken counts), `code` (tree-sitter AST-aware code compression), `redis` (distributed CCR backend), `ml` (Magika-based detection).
@@ -20,7 +20,7 @@ Or use the install scripts (pipx when available, `pip install --user` otherwise;
 both finish by running `tokenslim doctor` to verify):
 
 ```bash
-sh install.sh --with-extras      # Linux / macOS ("tokenslim[tokenizers,images,semantic]")
+sh install.sh --with-extras      # Linux / macOS ("tokenslim-ai[tokenizers,images,semantic]")
 .\install.ps1 -WithExtras        # Windows PowerShell
 ```
 

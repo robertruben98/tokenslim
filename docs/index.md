@@ -67,12 +67,12 @@ must-keep rows (errors) must survive in the visible output:
 ## Install
 
 ```bash
-pip install tokenslim
+pip install tokenslim-ai
 ```
 
 Or use the install scripts from the repository root (pipx when available,
 `pip install --user` otherwise; `--with-extras` adds
-`tokenslim[tokenizers,images,semantic]`):
+`tokenslim-ai[tokenizers,images,semantic]`):
 
 ```bash
 sh install.sh --with-extras      # Linux / macOS

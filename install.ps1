@@ -1,8 +1,8 @@
 # install.ps1 — install the TokenSlim CLI and library (Windows PowerShell / pwsh).
 #
 # Usage:
-#   .\install.ps1               # install tokenslim
-#   .\install.ps1 -WithExtras   # install tokenslim[tokenizers,images,semantic]
+#   .\install.ps1               # install tokenslim-ai
+#   .\install.ps1 -WithExtras   # install tokenslim-ai[tokenizers,images,semantic]
 #
 # Behavior mirrors install.sh:
 #   * Uses pipx when available, otherwise `pip install --user`.
@@ -15,7 +15,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Spec = if ($WithExtras) { 'tokenslim[tokenizers,images,semantic]' } else { 'tokenslim' }
+$Spec = if ($WithExtras) { 'tokenslim-ai[tokenizers,images,semantic]' } else { 'tokenslim-ai' }
 
 function Find-Python {
     # Prefer the py launcher: the bare 'python3'/'python' names may resolve to

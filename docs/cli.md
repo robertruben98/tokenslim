@@ -50,7 +50,7 @@ quickest way to see what a compression run will actually use:
 
 ```console
 $ tokenslim doctor
-TokenSlim version: 0.3.0
+TokenSlim version: 0.4.0
 Python version: 3.12.8
 ✓ tiktoken: Installed (accurate token counting enabled)
 ✗ magika: Not installed (using rule-based detector)
@@ -219,5 +219,5 @@ later milestone. (The `ProjectMemoryStore` Python API already works.)
 ## update
 
 Placeholder — self-update lands in a later milestone. Meanwhile:
-`pipx upgrade tokenslim` or `pip install -U tokenslim` (re-running
+`pipx upgrade tokenslim-ai` or `pip install -U tokenslim-ai` (re-running
 `install.sh` / `install.ps1` does the same).
