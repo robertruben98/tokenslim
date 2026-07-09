@@ -13,6 +13,7 @@ import click
 from . import __version__
 from .compress import compress
 from .config import load_config
+from .mcp_server import AGENTS
 
 
 @click.group()
@@ -68,6 +69,30 @@ def doctor() -> None:
         click.echo("✓ magika: Installed (ML-based content-type detection enabled)")
     except ImportError:
         click.echo("✗ magika: Not installed (using rule-based detector)")
+
+    # MCP server (issue #120): confirm the server agents launch actually starts.
+    from .mcp_server import (
+        MissingMCPError,
+        build_server,
+        registered_agents,
+        smoke_test_command,
+    )
+
+    try:
+        build_server()
+        click.echo("✓ mcp: SDK installed (MCP server available)")
+        try:
+            click.echo(f"  {smoke_test_command()}")
+        except (subprocess.SubprocessError, OSError) as e:
+            click.echo(f"✗ mcp: server failed to start ({e})")
+    except MissingMCPError:
+        click.echo('✗ mcp: SDK not installed (run: pip install "tokenslim[mcp]")')
+
+    agents = registered_agents()
+    if agents:
+        click.echo(f"✓ mcp: registered in {', '.join(t.label for t in agents)}")
+    else:
+        click.echo("  mcp: not registered in any agent (run: tokenslim install)")
 
     click.echo("\nResolved Configuration:")
     cfg = load_config()
@@ -309,16 +334,60 @@ def memory() -> None:
 
 
 @main.command()
-def install() -> None:
-    """Install/Register MCP server across agent platforms (Claude Code, Cursor)."""
-    try:
-        from tokenslim_mcp.install import install_mcp_configs
+@click.option(
+    "--check",
+    is_flag=True,
+    default=False,
+    help="Build the server, report its tools, and exit (smoke test).",
+)
+def mcp(check: bool) -> None:
+    """Run the TokenSlim MCP server over stdio (for agent integration)."""
+    from .mcp_server import TOOLS, MissingMCPError, build_server, serve
 
-        install_mcp_configs()
-    except ImportError:
-        click.echo("Error: tokenslim-mcp is not installed in the current environment.", err=True)
-        click.echo("Please install it first: pip install tokenslim-mcp", err=True)
+    try:
+        if check:
+            build_server()  # constructs + registers tools; raises if SDK missing
+            click.echo(f"MCP server OK — tools: {', '.join(TOOLS)}")
+            return
+        serve()
+    except MissingMCPError as e:
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+
+@main.command()
+@click.option(
+    "--agent",
+    "agents",
+    multiple=True,
+    type=click.Choice(sorted(AGENTS)),
+    help="Agent to register with (repeatable; default: all known agents).",
+)
+def install(agents: tuple[str, ...]) -> None:
+    """Register the TokenSlim MCP server with agent platforms (Claude Code, Cursor).
+
+    Points each agent at the local ``tokenslim mcp`` command, so no separate
+    package is needed. Install the server deps first: pip install "tokenslim[mcp]".
+    """
+    from .mcp_server import MissingMCPError, build_server, install_mcp_configs
+
+    # Fail fast if the server can't start, so we never register a dead command.
+    try:
+        build_server()
+    except MissingMCPError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    try:
+        results = install_mcp_configs(list(agents) or None)
+    except (OSError, ValueError) as e:
+        click.echo(f"Error registering MCP server: {e}", err=True)
+        sys.exit(1)
+
+    for target, changed in results:
+        state = "registered" if changed else "already up to date"
+        click.echo(f"✓ {target.label}: {state} ({target.path})")
+    click.echo("\nRun 'tokenslim doctor' to verify the server starts.")
 
 
 @main.command()

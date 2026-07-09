@@ -3628,6 +3628,7 @@ code = [
     { name = "tree-sitter-python" },
 ]
 dev = [
+    { name = "mcp" },
     { name = "mypy" },
     { name = "pillow" },
     { name = "pytest" },
@@ -3646,6 +3647,9 @@ images = [
 ]
 langchain = [
     { name = "langchain-core" },
+]
+mcp = [
+    { name = "mcp" },
 ]
 ml = [
     { name = "magika" },
@@ -3666,6 +3670,8 @@ requires-dist = [
     { name = "click", specifier = ">=8.0" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.3" },
     { name = "magika", marker = "extra == 'ml'", specifier = ">=0.5" },
+    { name = "mcp", marker = "extra == 'dev'", specifier = ">=1.0" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
     { name = "numpy", specifier = ">=1.24" },
